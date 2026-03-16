@@ -256,7 +256,7 @@ export const settingsSchema = z.object({
     paymentMethods: z.object({
       creditCards: z.boolean(),
       stripe: z.object({
-        apiKey: z.string().optional(),
+        publishableKey: z.string().optional(),
         secretKey: z.string().optional()
       }),
       paypal: z.object({

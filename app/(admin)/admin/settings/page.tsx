@@ -54,7 +54,7 @@ export default function SettingsPage() {
         paymentMethods: {
           creditCards: true,
           stripe: {
-            apiKey: '',
+            publishableKey: '',
             secretKey: ''
           },
           paypal: {
@@ -226,7 +226,8 @@ export default function SettingsPage() {
         paymentMethods: {
           creditCards: apiSettings.payment?.paymentMethods?.creditCards ?? true,
           stripe: {
-            apiKey: apiSettings.payment?.paymentMethods?.stripe?.apiKey || '',
+            publishableKey:
+              apiSettings.payment?.paymentMethods?.stripe?.publishableKey || '',
             secretKey:
               apiSettings.payment?.paymentMethods?.stripe?.secretKey || ''
           },

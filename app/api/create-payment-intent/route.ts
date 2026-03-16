@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getStripeConfig } from '@/lib/admin-settings';
+import { getStripeConfigAdmin } from '@/lib/admin-settings';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get Stripe configuration from admin settings
-    const stripeConfig = await getStripeConfig();
+    const stripeConfig = await getStripeConfigAdmin();
 
     if (!stripeConfig.enabled || !stripeConfig.secretKey) {
       return NextResponse.json(

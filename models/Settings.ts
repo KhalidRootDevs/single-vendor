@@ -1,4 +1,3 @@
-// models/Settings.ts
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ISettings extends Document {
@@ -25,7 +24,7 @@ export interface ISettings extends Document {
     paymentMethods: {
       creditCards: boolean;
       stripe: {
-        apiKey: string;
+        publishableKey: string;
         secretKey: string;
       };
       paypal: {
@@ -104,7 +103,7 @@ export interface ISettings extends Document {
       webhookUrl: string;
       webhooksEnabled: boolean;
     };
-    cloudinary: ICloudinaryConfig; // Added Cloudinary interface
+    cloudinary: ICloudinaryConfig;
     performance: {
       pageCaching: boolean;
       cacheDuration: number;
@@ -119,6 +118,15 @@ export interface ISettings extends Document {
   };
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ICloudinaryConfig {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+  uploadPreset: string;
+  secure: boolean;
+  folder: string;
 }
 
 // Sub-schemas for nested objects
@@ -184,7 +192,7 @@ const socialMediaSchema = new Schema({
 });
 
 const stripeSchema = new Schema({
-  apiKey: {
+  publishableKey: {
     type: String,
     default: ''
   },
@@ -522,7 +530,7 @@ const settingsSchema = new Schema(
     advanced: {
       analytics: analyticsSchema,
       api: apiSchema,
-      cloudinary: cloudinarySchema, // Added Cloudinary configuration
+      cloudinary: cloudinarySchema,
       performance: performanceSchema,
       maintenance: maintenanceSchema
     }
@@ -540,15 +548,6 @@ settingsSchema.statics.getSettings = async function () {
   }
   return settings;
 };
-
-export interface ICloudinaryConfig {
-  cloudName: string;
-  apiKey: string;
-  apiSecret: string;
-  uploadPreset: string;
-  secure: boolean;
-  folder: string;
-}
 
 export const Settings =
   mongoose.models.Settings ||

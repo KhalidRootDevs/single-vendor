@@ -12,10 +12,12 @@ async function fetchStripeConfig() {
 
   try {
     const response = await fetch('/api/stripe-config');
+
     if (!response.ok) {
       throw new Error('Failed to fetch Stripe configuration');
     }
     stripeConfig = await response.json();
+
     return stripeConfig;
   } catch (error) {
     console.error('Error fetching Stripe config:', error);

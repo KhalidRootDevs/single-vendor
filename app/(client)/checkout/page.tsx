@@ -9,8 +9,8 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from '@/components/ui/use-toast';
-import { CheckCircle2, AlertCircle, CreditCard, Plus } from 'lucide-react';
+
+import { CheckCircle2, AlertCircle, CreditCard, Plus, X } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -24,6 +24,14 @@ import { StripePaymentForm } from '@/components/checkout/stripe-payment-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Address } from '@/types';
 import { CheckoutFormValues, checkoutSchema } from '@/lib/validations/index';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog';
+import toast from 'react-hot-toast';
 
 // Shipping method options
 const shippingMethods = [
@@ -53,7 +61,6 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderId, setOrderId] = useState('');
-  const [clientSecret, setClientSecret] = useState('');
   const [paymentIntentId, setPaymentIntentId] = useState('');
   const [stripePromise, setStripePromise] = useState<Promise<any> | null>(null);
   const [stripeError, setStripeError] = useState('');
@@ -62,6 +69,11 @@ export default function CheckoutPage() {
   const [sameAsShipping, setSameAsShipping] = useState(true);
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+
+  // New state for payment modal
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [clientSecret, setClientSecret] = useState('');
+  const [creatingPaymentIntent, setCreatingPaymentIntent] = useState(false);
 
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
@@ -166,9 +178,11 @@ export default function CheckoutPage() {
     watch,
     setValue,
     getValues,
-    formState: { errors }
+    trigger,
+    formState: { errors, isValid }
   } = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
+    mode: 'onChange',
     defaultValues: {
       contactInfo: {
         fullName: '',
@@ -202,6 +216,7 @@ export default function CheckoutPage() {
   const paymentMethod = watch('paymentMethod');
   const shippingMethod = watch('shippingMethod');
   const shippingAddress = watch('shippingAddress');
+  const contactInfo = watch('contactInfo');
 
   useEffect(() => {
     if (sameAsShipping) {
@@ -224,19 +239,9 @@ export default function CheckoutPage() {
     }
   }, [shippingMethod]);
 
-  useEffect(() => {
-    if (
-      (paymentMethod === 'credit_card' || paymentMethod === 'debit_card') &&
-      total > 0 &&
-      stripeConfigured &&
-      !checkingStripe
-    ) {
-      createPaymentIntent();
-    }
-  }, [paymentMethod, total, stripeConfigured, checkingStripe]);
-
   const createPaymentIntent = async () => {
     try {
+      setCreatingPaymentIntent(true);
       setStripeError('');
 
       if (!total || total <= 0) throw new Error('Invalid order total');
@@ -249,7 +254,8 @@ export default function CheckoutPage() {
           currency: 'usd',
           metadata: {
             orderItems: items.length.toString(),
-            customerEmail: watch('contactInfo.email') || 'guest@example.com',
+            customerEmail: contactInfo.email || 'guest@example.com',
+            customerName: contactInfo.fullName,
             orderTotal: total.toString()
           }
         })
@@ -262,65 +268,75 @@ export default function CheckoutPage() {
       if (data.clientSecret) {
         setClientSecret(data.clientSecret);
         setPaymentIntentId(data.paymentIntentId || '');
+        return true;
       } else throw new Error('No client secret received from server');
     } catch (error: any) {
       console.error('❌ Error creating payment intent:', error);
       const msg =
         error.message || 'Unable to initialize payment. Please try again.';
       setStripeError(msg);
-      toast({
-        title: 'Payment setup failed',
-        description: msg,
-        variant: 'destructive'
-      });
+
+      toast.error('Payment setup failed');
+
+      return false;
+    } finally {
+      setCreatingPaymentIntent(false);
+    }
+  };
+
+  const handlePlaceOrder = async () => {
+    // Trigger validation for all fields
+    const isValid = await trigger();
+
+    if (!isValid) {
+      toast.error(
+        'Validation error! Please fill in all required fields correctly.'
+      );
+
+      return;
+    }
+
+    if (items.length === 0) {
+      toast.error(
+        'Cart is empty! Please add items to your cart before checking out.'
+      );
+
+      return;
+    }
+
+    const currentPaymentMethod = getValues('paymentMethod');
+
+    if (
+      currentPaymentMethod === 'credit_card' ||
+      currentPaymentMethod === 'debit_card'
+    ) {
+      if (!stripeConfigured) {
+        setStripeError(
+          'Payment system unavailable. Please select another payment method.'
+        );
+
+        toast.error(
+          'Payment unavailable! Please choose another payment option.'
+        );
+
+        return;
+      }
+
+      // Create payment intent and show modal
+      const intentCreated = await createPaymentIntent();
+      if (intentCreated) {
+        setShowPaymentModal(true);
+      }
+    } else {
+      // For non-card payments, process directly
+      const formData = getValues();
+      await processOrder(formData);
     }
   };
 
   const onSubmit = async (data: CheckoutFormValues) => {
-    console.log('✅ Checkout form submitted with data:', data);
-
-    if (items.length === 0) {
-      toast({
-        title: 'Cart is empty',
-        description: 'Please add items to your cart before checking out.',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-
-      if (
-        data.paymentMethod === 'credit_card' ||
-        data.paymentMethod === 'debit_card'
-      ) {
-        if (!stripeConfigured || !clientSecret) {
-          setStripeError(
-            'Payment system unavailable. Please select another payment method.'
-          );
-          toast({
-            title: 'Payment unavailable',
-            description: 'Please choose another payment option.',
-            variant: 'destructive'
-          });
-          return;
-        }
-        console.log('🟡 Awaiting Stripe payment confirmation...');
-      } else {
-        await processOrder(data);
-      }
-    } catch (error) {
-      console.error('❌ Checkout submission error:', error);
-      toast({
-        title: 'Checkout failed',
-        description:
-          error instanceof Error ? error.message : 'An unknown error occurred.',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+    // This function is now handled by handlePlaceOrder
+    // Keeping it for the form's onSubmit handler
   };
 
   const processOrder = async (
@@ -393,6 +409,7 @@ export default function CheckoutPage() {
         paymentMethod: data.paymentMethod,
         paymentStatus:
           data.paymentMethod === 'cash_on_delivery' ? 'pending' : 'paid',
+        paymentIntentId: paymentIntent?.id || paymentIntentId,
         shippingMethod: selectedShippingMethod?.name || 'Standard Shipping',
         notes: data.notes,
         subtotal,
@@ -425,20 +442,17 @@ export default function CheckoutPage() {
       setOrderId(result.order.orderNumber);
       clearCart();
       setOrderComplete(true);
+      setShowPaymentModal(false);
 
-      toast({
-        title: 'Order placed successfully',
-        description: `Your order ${result.order.orderNumber} has been confirmed.`
-      });
+      toast.success(
+        `Your order ${result.order.orderNumber} has been confirmed.`
+      );
     } catch (error: any) {
       console.error('❌ Error processing order:', error);
-      toast({
-        title: 'Error processing order',
-        description:
-          error.message ||
-          'There was an error processing your order. Please try again.',
-        variant: 'destructive'
-      });
+
+      toast.error(
+        'There was an error processing your order. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -446,6 +460,7 @@ export default function CheckoutPage() {
 
   const handleStripeSuccess = (paymentIntent: any) => {
     const formData = getValues();
+
     console.log('✅ Stripe payment success, intent:', paymentIntent);
     processOrder(formData, paymentIntent);
   };
@@ -453,6 +468,7 @@ export default function CheckoutPage() {
   const handleStripeError = (error: string) => {
     console.error('❌ Stripe payment error:', error);
     setStripeError(error);
+    setShowPaymentModal(false);
   };
 
   const handlePaymentMethodChange = (value: string) => {
@@ -461,6 +477,11 @@ export default function CheckoutPage() {
       'paymentMethod',
       value as 'credit_card' | 'debit_card' | 'paypal' | 'cash_on_delivery'
     );
+  };
+
+  const closePaymentModal = () => {
+    setShowPaymentModal(false);
+    setStripeError('');
   };
 
   if (!isMounted) return null;
@@ -491,7 +512,7 @@ export default function CheckoutPage() {
             <span className="font-medium">${total.toFixed(2)}</span>
           </div>
           {paymentIntentId && (
-            <div className="flex justify-between">
+            <div className="mt-2 flex justify-between">
               <span>Payment ID:</span>
               <span className="text-xs font-medium">{paymentIntentId}</span>
             </div>
@@ -521,23 +542,7 @@ export default function CheckoutPage() {
     <Container>
       <h1 className="mb-8 text-3xl font-bold">Checkout</h1>
 
-      <form
-        onSubmit={handleSubmit(onSubmit, (formErrors) => {
-          const currentData = getValues(); // <-- this gets whatever the user entered
-
-          console.group('🔴 Validation Failed — Form Not Submitted');
-          console.log('Form Data (User Entered):', currentData);
-          console.log('Validation Errors:', formErrors);
-          console.groupEnd();
-
-          toast({
-            title: 'Validation error',
-            description:
-              'Please correct the highlighted fields before continuing.',
-            variant: 'destructive'
-          });
-        })}
-      >
+      <form onSubmit={handleSubmit(onSubmit)}>
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             {/* Contact Information */}
@@ -1031,58 +1036,29 @@ export default function CheckoutPage() {
               </CardContent>
             </Card>
 
-            {/* Stripe Payment Form */}
-            {(paymentMethod === 'credit_card' ||
-              paymentMethod === 'debit_card') &&
-              clientSecret &&
-              stripePromise &&
-              !stripeError &&
-              stripeConfigured && (
-                <Elements
-                  stripe={stripePromise}
-                  options={{
-                    clientSecret,
-                    appearance: {
-                      theme: 'stripe',
-                      variables: {
-                        colorPrimary: '#000000'
-                      }
-                    }
-                  }}
+            {/* Place Order Button - Always visible */}
+            <Card>
+              <CardContent className="pt-6">
+                <Button
+                  className="w-full"
+                  size="lg"
+                  type="button"
+                  onClick={handlePlaceOrder}
+                  disabled={isSubmitting || creatingPaymentIntent}
                 >
-                  <StripePaymentForm
-                    clientSecret={clientSecret}
-                    onSuccess={handleStripeSuccess}
-                    onError={handleStripeError}
-                    isProcessing={isSubmitting}
-                    setIsProcessing={setIsSubmitting}
-                  />
-                </Elements>
-              )}
-
-            {/* Non-card payment submit button */}
-            {paymentMethod !== 'credit_card' &&
-              paymentMethod !== 'debit_card' && (
-                <Card>
-                  <CardContent className="pt-6">
-                    <Button
-                      className="w-full"
-                      size="lg"
-                      type="submit"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <div className="flex items-center">
-                          <div className="mr-2 h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                          Processing...
-                        </div>
-                      ) : (
-                        'Place Order'
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
+                  {isSubmitting || creatingPaymentIntent ? (
+                    <div className="flex items-center">
+                      <div className="mr-2 h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      {creatingPaymentIntent
+                        ? 'Setting up payment...'
+                        : 'Processing...'}
+                    </div>
+                  ) : (
+                    'Place Order'
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Order Summary */}
@@ -1151,6 +1127,54 @@ export default function CheckoutPage() {
           </div>
         </div>
       </form>
+
+      {/* Payment Modal */}
+      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Complete Payment
+            </DialogTitle>
+            <DialogDescription>
+              Enter your card details to complete the payment of $
+              {total.toFixed(2)}
+            </DialogDescription>
+          </DialogHeader>
+
+          {clientSecret && stripePromise && (
+            <Elements
+              stripe={stripePromise}
+              options={{
+                clientSecret,
+                appearance: {
+                  theme: 'stripe',
+                  variables: {
+                    colorPrimary: '#000000'
+                  }
+                }
+              }}
+            >
+              <StripePaymentForm
+                clientSecret={clientSecret}
+                onSuccess={handleStripeSuccess}
+                onError={handleStripeError}
+                isProcessing={isSubmitting}
+                setIsProcessing={setIsSubmitting}
+              />
+            </Elements>
+          )}
+
+          <Button
+            variant="ghost"
+            className="mt-2"
+            onClick={closePaymentModal}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+        </DialogContent>
+      </Dialog>
     </Container>
   );
 }

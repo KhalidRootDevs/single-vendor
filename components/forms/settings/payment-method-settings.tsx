@@ -16,6 +16,8 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Eye, EyeOff } from 'lucide-react';
+import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 
 export default function PaymentMethod({
@@ -31,6 +33,12 @@ export default function PaymentMethod({
   } = useFormContext<SettingsFormData>();
   const watchedValues = watch();
 
+  // State for password visibility
+  const [showStripeKey, setShowStripeKey] = useState(false);
+  const [showStripeSecret, setShowStripeSecret] = useState(false);
+  const [showPaypalClient, setShowPaypalClient] = useState(false);
+  const [showPaypalSecret, setShowPaypalSecret] = useState(false);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -45,7 +53,7 @@ export default function PaymentMethod({
             <div className="flex items-center justify-between space-x-2">
               <div className="flex items-center space-x-2">
                 <div className="flex h-6 w-10 items-center justify-center rounded bg-[#3D95CE] text-xs font-bold text-white">
-                  VISA
+                  Stripe
                 </div>
                 <Label htmlFor="visa" className="font-medium">
                   Credit/Debit Cards
@@ -65,20 +73,46 @@ export default function PaymentMethod({
             {watchedValues.payment?.paymentMethods?.creditCards && (
               <div className="space-y-4 pl-12">
                 <div className="space-y-2">
-                  <Label htmlFor="stripe-key">Stripe API Key</Label>
-                  <Input
-                    id="stripe-key"
-                    type="password"
-                    {...register('payment.paymentMethods.stripe.apiKey')}
-                  />
+                  <Label htmlFor="stripe-key">Publishable Key</Label>
+                  <div className="relative">
+                    <Input
+                      id="stripe-key"
+                      type={showStripeKey ? 'text' : 'password'}
+                      {...register(
+                        'payment.paymentMethods.stripe.publishableKey'
+                      )}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStripeKey(!showStripeKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showStripeKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="stripe-secret">Stripe Secret Key</Label>
-                  <Input
-                    id="stripe-secret"
-                    type="password"
-                    {...register('payment.paymentMethods.stripe.secretKey')}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="stripe-secret"
+                      type={showStripeSecret ? 'text' : 'password'}
+                      {...register('payment.paymentMethods.stripe.secretKey')}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStripeSecret(!showStripeSecret)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showStripeSecret ? (
+                        <EyeOff size={18} />
+                      ) : (
+                        <Eye size={18} />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -109,18 +143,47 @@ export default function PaymentMethod({
               <div className="space-y-4 pl-12">
                 <div className="space-y-2">
                   <Label htmlFor="paypal-client">PayPal Client ID</Label>
-                  <Input
-                    id="paypal-client"
-                    {...register('payment.paymentMethods.paypal.clientId')}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="paypal-client"
+                      type={showPaypalClient ? 'text' : 'password'}
+                      {...register('payment.paymentMethods.paypal.clientId')}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPaypalClient(!showPaypalClient)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPaypalClient ? (
+                        <EyeOff size={18} />
+                      ) : (
+                        <Eye size={18} />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="paypal-secret">PayPal Secret</Label>
-                  <Input
-                    id="paypal-secret"
-                    type="password"
-                    {...register('payment.paymentMethods.paypal.secret')}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="paypal-secret"
+                      type={showPaypalSecret ? 'text' : 'password'}
+                      {...register('payment.paymentMethods.paypal.secret')}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPaypalSecret(!showPaypalSecret)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPaypalSecret ? (
+                        <EyeOff size={18} />
+                      ) : (
+                        <Eye size={18} />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -231,6 +294,7 @@ export default function PaymentMethod({
                 <Input
                   id="tax-rate"
                   type="number"
+                  step="0.01"
                   {...register('payment.tax.taxRate', {
                     valueAsNumber: true
                   })}

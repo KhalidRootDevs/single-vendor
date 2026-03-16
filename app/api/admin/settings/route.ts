@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Settings } from '@/models/Settings';
 import connectDB from '@/lib/database';
+import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,20 +13,33 @@ export async function GET(request: NextRequest) {
     // Remove sensitive data before sending
     const safeSettings = JSON.parse(JSON.stringify(settings));
 
+    // Hide Stripe sensitive data
     if (safeSettings.payment?.paymentMethods?.stripe) {
+      safeSettings.payment.paymentMethods.stripe.publishableKey = '[HIDDEN]';
       safeSettings.payment.paymentMethods.stripe.secretKey = '[HIDDEN]';
     }
 
+    // Hide PayPal sensitive data
     if (safeSettings.payment?.paymentMethods?.paypal) {
+      safeSettings.payment.paymentMethods.paypal.clientId = '[HIDDEN]';
       safeSettings.payment.paymentMethods.paypal.secret = '[HIDDEN]';
     }
 
+    // Hide SMTP sensitive data
     if (safeSettings.email?.provider?.smtp) {
+      safeSettings.email.provider.smtp.username = '[HIDDEN]';
       safeSettings.email.provider.smtp.password = '[HIDDEN]';
     }
 
+    // Hide API sensitive data
     if (safeSettings.advanced?.api) {
       safeSettings.advanced.api.apiKey = '[HIDDEN]';
+    }
+
+    // Hide Cloudinary sensitive data
+    if (safeSettings.advanced?.cloudinary) {
+      safeSettings.advanced.cloudinary.apiKey = '[HIDDEN]';
+      safeSettings.advanced.cloudinary.apiSecret = '[HIDDEN]';
     }
 
     return NextResponse.json({ settings: safeSettings });
@@ -72,12 +86,12 @@ export async function PUT(request: NextRequest) {
     // Remove sensitive data from response
     const safeSettings = JSON.parse(JSON.stringify(settings));
 
-    // Handle payment sensitive fields
+    // Handle payment sensitive fields in response
     if (safeSettings.payment?.paymentMethods?.stripe) {
-      safeSettings.payment.paymentMethods.stripe.apiKey = updatedSettings
-        .payment?.paymentMethods?.stripe?.apiKey
-        ? '[UPDATED]'
-        : '[HIDDEN]';
+      safeSettings.payment.paymentMethods.stripe.publishableKey =
+        updatedSettings.payment?.paymentMethods?.stripe?.publishableKey
+          ? '[UPDATED]'
+          : '[HIDDEN]';
       safeSettings.payment.paymentMethods.stripe.secretKey = updatedSettings
         .payment?.paymentMethods?.stripe?.secretKey
         ? '[UPDATED]'
@@ -95,7 +109,7 @@ export async function PUT(request: NextRequest) {
         : '[HIDDEN]';
     }
 
-    // Handle email sensitive fields
+    // Handle email sensitive fields in response
     if (safeSettings.email?.provider?.smtp) {
       safeSettings.email.provider.smtp.username = updatedSettings.email
         ?.provider?.smtp?.username
@@ -107,14 +121,14 @@ export async function PUT(request: NextRequest) {
         : '[HIDDEN]';
     }
 
-    // Handle API sensitive fields
+    // Handle API sensitive fields in response
     if (safeSettings.advanced?.api) {
       safeSettings.advanced.api.apiKey = updatedSettings.advanced?.api?.apiKey
         ? '[UPDATED]'
         : '[HIDDEN]';
     }
 
-    // Handle Cloudinary sensitive fields
+    // Handle Cloudinary sensitive fields in response
     if (safeSettings.advanced?.cloudinary) {
       safeSettings.advanced.cloudinary.apiKey = updatedSettings.advanced
         ?.cloudinary?.apiKey
@@ -182,7 +196,7 @@ function deepMergeSettings(existing: any, updated: any): any {
 // Function to identify sensitive fields that shouldn't be overwritten with empty values
 function isSensitiveField(key: string, target: any, source: any): boolean {
   const sensitiveFields = [
-    'apiKey',
+    'publishableKey',
     'secretKey',
     'secret',
     'clientId',
@@ -207,7 +221,10 @@ function isSensitiveField(key: string, target: any, source: any): boolean {
   }
 
   // Stripe sensitive fields
-  if (path.includes('stripe') && (key === 'apiKey' || key === 'secretKey')) {
+  if (
+    path.includes('stripe') &&
+    (key === 'publishableKey' || key === 'secretKey')
+  ) {
     return true;
   }
 
@@ -231,28 +248,36 @@ function isSensitiveField(key: string, target: any, source: any): boolean {
 
 // Helper function to get object path for context-aware sensitive field detection
 function getObjectPath(target: any, source: any): string {
-  // This is a simplified implementation - you might want to enhance this
-  // based on your specific object structure
+  // Check Cloudinary path
   if (target?.advanced?.cloudinary && source?.advanced?.cloudinary) {
     return 'advanced.cloudinary';
   }
+
+  // Check Stripe path
   if (
     target?.payment?.paymentMethods?.stripe &&
     source?.payment?.paymentMethods?.stripe
   ) {
     return 'payment.paymentMethods.stripe';
   }
+
+  // Check PayPal path
   if (
     target?.payment?.paymentMethods?.paypal &&
     source?.payment?.paymentMethods?.paypal
   ) {
     return 'payment.paymentMethods.paypal';
   }
+
+  // Check SMTP path
   if (target?.email?.provider?.smtp && source?.email?.provider?.smtp) {
     return 'email.provider.smtp';
   }
+
+  // Check API path
   if (target?.advanced?.api && source?.advanced?.api) {
     return 'advanced.api';
   }
+
   return '';
 }
