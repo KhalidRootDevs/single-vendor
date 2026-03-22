@@ -227,14 +227,7 @@ export async function POST(request: NextRequest) {
       shippingAddress,
       billingAddress: billingAddress || shippingAddress,
       notes,
-      guestOrder: isGuest, // Mark if this is a guest order
-      timeline: [
-        {
-          status: 'order_placed',
-          date: new Date(),
-          description: 'Order was placed by customer'
-        }
-      ]
+      guestOrder: isGuest // Mark if this is a guest order
     };
 
     const order = await Order.create(orderData);
