@@ -436,8 +436,6 @@ export default function CheckoutPage() {
         ]
       };
 
-      console.log('[v0] Payment Intent Status:', paymentIntent?.status);
-      console.log('[v0] Payment Status being set to:', paymentStatus);
       console.log('📦 Sending order data to /api/orders:', orderData);
 
       const response = await fetch('/api/orders', {
