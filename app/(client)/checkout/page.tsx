@@ -426,14 +426,7 @@ export default function CheckoutPage() {
         subtotal,
         tax,
         shipping: selectedShippingMethod?.price || shipping,
-        total: total + (selectedShippingMethod?.price || 0) - shipping,
-        timeline: [
-          {
-            status: 'order_placed' as const,
-            date: new Date(),
-            description: 'Order was placed by customer'
-          }
-        ]
+        total: total + (selectedShippingMethod?.price || 0) - shipping
       };
 
       console.log('📦 Sending order data to /api/orders:', orderData);
