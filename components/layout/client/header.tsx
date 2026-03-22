@@ -68,20 +68,20 @@ function useDebounce<T>(value: T, delay: number): T {
 
 // Category icons mapping
 const categoryIcons: Record<string, React.ReactNode> = {
-  Electronics: <Laptop className="mr-2 h-4 w-4" />,
-  Clothing: <ShirtIcon className="mr-2 h-4 w-4" />,
-  'Home & Kitchen': <Home className="mr-2 h-4 w-4" />,
-  'Beauty & Personal Care': <Sparkles className="mr-2 h-4 w-4" />,
-  'Sports & Outdoors': <Dumbbell className="mr-2 h-4 w-4" />,
-  Books: <BookOpen className="mr-2 h-4 w-4" />,
-  'Toys & Games': <Gamepad2 className="mr-2 h-4 w-4" />,
-  'Health & Wellness': <Heart className="mr-2 h-4 w-4" />,
-  Automotive: <Car className="mr-2 h-4 w-4" />,
-  'Pet Supplies': <Dog className="mr-2 h-4 w-4" />,
-  Jewelry: <Gem className="mr-2 h-4 w-4" />,
-  'Office Supplies': <FileText className="mr-2 h-4 w-4" />,
-  Accessories: <Briefcase className="mr-2 h-4 w-4" />,
-  Footwear: <Footprints className="mr-2 h-4 w-4" />
+  Electronics: <Laptop className="h-4 w-4" />,
+  Clothing: <ShirtIcon className="h-4 w-4" />,
+  'Home & Kitchen': <Home className="h-4 w-4" />,
+  'Beauty & Personal Care': <Sparkles className="h-4 w-4" />,
+  'Sports & Outdoors': <Dumbbell className="h-4 w-4" />,
+  Books: <BookOpen className="h-4 w-4" />,
+  'Toys & Games': <Gamepad2 className="h-4 w-4" />,
+  'Health & Wellness': <Heart className="h-4 w-4" />,
+  Automotive: <Car className="h-4 w-4" />,
+  'Pet Supplies': <Dog className="h-4 w-4" />,
+  Jewelry: <Gem className="h-4 w-4" />,
+  'Office Supplies': <FileText className="h-4 w-4" />,
+  Accessories: <Briefcase className="h-4 w-4" />,
+  Footwear: <Footprints className="h-4 w-4" />
 };
 
 // Mock category data for the mega menu
@@ -318,36 +318,46 @@ export function Header({ categoryTree }: HeaderProps) {
 
                 <NavigationMenuItem>
                   <NavigationMenuTrigger
-                    className={
+                    className={cn(
+                      'transition-colors',
                       isActive('/categories')
                         ? 'text-primary'
                         : 'text-muted-foreground'
-                    }
+                    )}
                   >
                     Categories
                   </NavigationMenuTrigger>
                   <NavigationMenuContent className="overflow-hidden">
-                    {/* Responsive mega menu - adjust columns based on screen size */}
-                    <div className="mx-auto w-[calc(100vw-2rem)] max-w-screen-lg">
-                      <div className="grid max-h-[80vh] grid-cols-1 gap-3 overflow-y-auto p-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {/* Modern mega menu with enhanced styling */}
+                    <div className="mx-auto w-[calc(100vw-2rem)] max-w-5xl">
+                      <div className="grid max-h-[85vh] auto-rows-max grid-cols-1 gap-1 overflow-y-auto p-6 sm:grid-cols-2 lg:grid-cols-5">
                         {categoryTree.map((category: any) => {
+                          const categoryIcon = categoryIcons[category.name];
                           return (
-                            <div className="col-span-1">
-                              <div className="mb-2 mt-4 text-lg font-medium">
-                                {category.name}
+                            <div key={category.name} className="col-span-1">
+                              <div className="mb-3 flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                                  {categoryIcon ? (
+                                    <div className="h-4 w-4 text-primary">
+                                      {categoryIcon}
+                                    </div>
+                                  ) : (
+                                    <ShirtIcon className="h-4 w-4 text-primary" />
+                                  )}
+                                </div>
+                                <h3 className="font-semibold text-foreground">
+                                  {category.name}
+                                </h3>
                               </div>
-                              <div className="grid grid-cols-1 gap-2">
+                              <div className="space-y-1">
                                 {category.subCategories.length > 0 ? (
                                   category.subCategories.map(
                                     (subCategory: any) => (
                                       <Link
                                         key={subCategory.name}
                                         href={`/products?categories=${subCategory.slug}`}
-                                        className="flex items-center rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+                                        className="flex items-center rounded-md px-3 py-2 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted hover:text-primary hover:translate-x-1"
                                       >
-                                        {/* {categoryIcons[category.name] || (
-                                        <ShirtIcon className="h-4 w-4 mr-2 flex-shrink-0" />
-                                      )} */}
                                         <span className="truncate">
                                           {subCategory.name}
                                         </span>
@@ -361,47 +371,6 @@ export function Header({ categoryTree }: HeaderProps) {
                             </div>
                           );
                         })}
-
-                        {/* Featured section - hide on smaller screens */}
-                        {/* <div className="col-span-1 bg-muted rounded-lg p-4 hidden lg:block">
-                          <div className="mb-2 text-lg font-medium">
-                            Featured
-                          </div>
-                          <div className="space-y-3">
-                            {featuredCategories.map((category) => (
-                              <Link
-                                key={category.name}
-                                href={category.href}
-                                className="block group"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className="relative h-12 w-12 rounded-md overflow-hidden flex-shrink-0">
-                                    <Image
-                                      src={category.image || "/placeholder.svg"}
-                                      alt={category.name}
-                                      fill
-                                      className="object-cover transition-transform group-hover:scale-105"
-                                    />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="font-medium group-hover:text-primary transition-colors truncate">
-                                      {category.name}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground truncate">
-                                      {category.description}
-                                    </div>
-                                  </div>
-                                </div>
-                              </Link>
-                            ))}
-                            <Link
-                              href="/categories"
-                              className="text-sm font-medium text-primary hover:underline block mt-4"
-                            >
-                              View all categories →
-                            </Link>
-                          </div>
-                        </div> */}
                       </div>
                     </div>
                   </NavigationMenuContent>
