@@ -18,12 +18,35 @@ export default function AdminLayout({
   const router = useRouter();
   const { user, isLoading, checkAuth } = useAuth();
   const hasCheckedAuth = useRef(false);
+  const isRedirectingRef = useRef(false);
 
   // Check if user has admin role
   const isAdmin =
     user?.role === 'admin' ||
     user?.role === 'moderator' ||
     user?.role === 'support';
+
+  // Redirect logic - only run once after loading is complete
+  useEffect(() => {
+    // If loading is complete and we haven't checked auth yet
+    if (!isLoading && !hasCheckedAuth.current) {
+      hasCheckedAuth.current = true;
+      
+      // If no user is logged in, redirect to home
+      if (!user) {
+        isRedirectingRef.current = true;
+        router.push('/');
+        return;
+      }
+
+      // If user is logged in but doesn't have admin role, redirect to home
+      if (user && !isAdmin) {
+        isRedirectingRef.current = true;
+        router.push('/');
+        return;
+      }
+    }
+  }, [isLoading, user, isAdmin, router]);
 
   // Show loading state
   if (isLoading) {
@@ -37,28 +60,8 @@ export default function AdminLayout({
     );
   }
 
-  // Redirect logic - only run once after loading is complete
-  useEffect(() => {
-    // If loading is complete and we haven't checked auth yet
-    if (!isLoading && !hasCheckedAuth.current) {
-      hasCheckedAuth.current = true;
-      
-      // If no user is logged in, redirect to home
-      if (!user) {
-        router.push('/');
-        return;
-      }
-
-      // If user is logged in but doesn't have admin role, redirect to home
-      if (user && !isAdmin) {
-        router.push('/');
-        return;
-      }
-    }
-  }, [isLoading, user, isAdmin, router]);
-
-  // Don't render anything if no user or not admin
-  if (!user || !isAdmin) {
+  // If redirecting or no user/admin access, don't render layout
+  if (isRedirectingRef.current || !user || !isAdmin) {
     return null;
   }
 
