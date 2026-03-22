@@ -329,14 +329,14 @@ export function Header({ categoryTree }: HeaderProps) {
                   </NavigationMenuTrigger>
                   <NavigationMenuContent className="overflow-hidden">
                     {/* Modern mega menu with enhanced styling */}
-                    <div className="mx-auto w-[calc(100vw-2rem)] max-w-5xl">
-                      <div className="grid max-h-[85vh] auto-rows-max grid-cols-1 gap-1 overflow-y-auto p-6 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="w-screen max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-5xl">
+                      <div className="grid max-h-[70vh] auto-rows-max grid-cols-1 gap-2 overflow-y-auto p-4 sm:gap-3 sm:p-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
                         {categoryTree.map((category: any) => {
                           const categoryIcon = categoryIcons[category.name];
                           return (
                             <div key={category.name} className="col-span-1">
-                              <div className="mb-3 flex items-center gap-2">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                              <div className="mb-2 flex items-center gap-2 sm:mb-3">
+                                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-8 sm:w-8">
                                   {categoryIcon ? (
                                     <div className="h-4 w-4 text-primary">
                                       {categoryIcon}
@@ -345,18 +345,18 @@ export function Header({ categoryTree }: HeaderProps) {
                                     <ShirtIcon className="h-4 w-4 text-primary" />
                                   )}
                                 </div>
-                                <h3 className="font-semibold text-foreground">
+                                <h3 className="truncate font-semibold text-sm text-foreground sm:text-base">
                                   {category.name}
                                 </h3>
                               </div>
-                              <div className="space-y-1">
+                              <div className="space-y-0.5 sm:space-y-1">
                                 {category.subCategories.length > 0 ? (
                                   category.subCategories.map(
                                     (subCategory: any) => (
                                       <Link
                                         key={subCategory.name}
                                         href={`/products?categories=${subCategory.slug}`}
-                                        className="flex items-center rounded-md px-3 py-2 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted hover:text-primary hover:translate-x-1"
+                                        className="block rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-all duration-200 hover:bg-muted hover:text-primary hover:translate-x-1 sm:px-3 sm:py-2 sm:text-sm"
                                       >
                                         <span className="truncate">
                                           {subCategory.name}
