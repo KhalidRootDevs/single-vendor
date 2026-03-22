@@ -36,6 +36,8 @@ export async function POST(request: NextRequest) {
       shippingAddress,
       billingAddress,
       paymentMethod,
+      paymentStatus,
+      paymentIntentId,
       cardDetails,
       shippingMethod,
       notes,
@@ -218,6 +220,8 @@ export async function POST(request: NextRequest) {
       shipping,
       total,
       paymentMethod,
+      paymentStatus: paymentStatus || 'pending', // Use paymentStatus from request, default to pending
+      paymentIntentId: paymentIntentId || undefined, // Store Stripe payment intent ID if provided
       cardDetails,
       shippingMethod,
       shippingAddress,
