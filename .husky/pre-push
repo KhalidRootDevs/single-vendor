@@ -1,4 +1,10 @@
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
-# Only build for exact match of "main"
-[ "$BRANCH" = "main" ] && npm run build || echo "Skipping build - not on main branch (current: $BRANCH)" && exit 0
+# Only build for main branch
+if [ "$BRANCH" = "main" ]; then
+  echo "Building on main branch..."
+  npm run build
+else
+  echo "Skipping build - not on main branch (current: $BRANCH)"
+  exit 0
+fi
