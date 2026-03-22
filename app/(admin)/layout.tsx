@@ -8,7 +8,7 @@ import AdminHeader from '@/components/layout/admin/header';
 import AdminSidebar from '@/components/layout/admin/sidebar';
 import { useAuth } from '@/context/auth-context';
 import { Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export default function AdminLayout({
   children
@@ -16,7 +16,8 @@ export default function AdminLayout({
   children: React.ReactNode;
 }>) {
   const router = useRouter();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, checkAuth } = useAuth();
+  const hasCheckedAuth = useRef(false);
 
   // Check if user has admin role
   const isAdmin =
@@ -36,9 +37,12 @@ export default function AdminLayout({
     );
   }
 
-  // Redirect logic
+  // Redirect logic - only run once after loading is complete
   useEffect(() => {
-    if (!isLoading) {
+    // If loading is complete and we haven't checked auth yet
+    if (!isLoading && !hasCheckedAuth.current) {
+      hasCheckedAuth.current = true;
+      
       // If no user is logged in, redirect to home
       if (!user) {
         router.push('/');
@@ -51,7 +55,7 @@ export default function AdminLayout({
         return;
       }
     }
-  }, [user, isLoading, isAdmin, router]);
+  }, [isLoading, user, isAdmin, router]);
 
   // Don't render anything if no user or not admin
   if (!user || !isAdmin) {
