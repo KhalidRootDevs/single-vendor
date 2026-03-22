@@ -387,6 +387,18 @@ export default function CheckoutPage() {
             country: data.billingAddress.country || ''
           };
 
+      // Determine payment status based on payment method and Stripe confirmation
+      let paymentStatus: 'pending' | 'paid' | 'failed' = 'pending';
+      if (data.paymentMethod === 'cash_on_delivery') {
+        paymentStatus = 'pending';
+      } else if (data.paymentMethod === 'credit_card' || data.paymentMethod === 'debit_card') {
+        // For card payments, only set to 'paid' if we have a successful payment intent
+        paymentStatus = paymentIntent && paymentIntent.status === 'succeeded' ? 'paid' : 'pending';
+      } else {
+        // For other payment methods, default to pending
+        paymentStatus = 'pending';
+      }
+
       const orderData = {
         customer: {
           id: user?.id || 'guest',
@@ -407,8 +419,7 @@ export default function CheckoutPage() {
         billingAddress: billingAddressData,
         items: orderItems,
         paymentMethod: data.paymentMethod,
-        paymentStatus:
-          data.paymentMethod === 'cash_on_delivery' ? 'pending' : 'paid',
+        paymentStatus: paymentStatus,
         paymentIntentId: paymentIntent?.id || paymentIntentId,
         shippingMethod: selectedShippingMethod?.name || 'Standard Shipping',
         notes: data.notes,
@@ -425,6 +436,8 @@ export default function CheckoutPage() {
         ]
       };
 
+      console.log('[v0] Payment Intent Status:', paymentIntent?.status);
+      console.log('[v0] Payment Status being set to:', paymentStatus);
       console.log('📦 Sending order data to /api/orders:', orderData);
 
       const response = await fetch('/api/orders', {
