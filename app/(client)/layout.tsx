@@ -1,5 +1,5 @@
-import { Footer } from '@/components/layout/footer';
-import { Header } from '@/components/layout/header';
+import { Footer } from '@/components/layout/client/footer';
+import { Header } from '@/components/layout/client/header';
 import { Category } from '@/types';
 import type { Metadata } from 'next';
 import type React from 'react';

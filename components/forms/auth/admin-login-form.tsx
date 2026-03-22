@@ -18,9 +18,11 @@ export default function AdminLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors }
   } = useForm<AdminLoginFormValues>({
     resolver: zodResolver(adminLoginSchema),
@@ -41,6 +43,25 @@ export default function AdminLoginForm() {
     }
   };
 
+  // One-click development login
+  const handleDevLogin = async () => {
+    setError(null);
+    const devEmail = 'admin@example.com';
+    const devPassword = 'admin@example.com';
+
+    // Optionally fill the form fields for visual feedback
+    setValue('email', devEmail);
+    setValue('password', devPassword);
+
+    const success = await login(devEmail, devPassword);
+
+    if (!success) {
+      setError('Invalid email or password. Please try again.');
+    } else {
+      router.push('/admin/dashboard');
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       {error && (
@@ -53,6 +74,7 @@ export default function AdminLoginForm() {
           </AlertDescription>
         </Alert>
       )}
+
       <div className="space-y-2">
         <Label htmlFor="email" className="text-sm font-medium text-slate-300">
           Email Address
@@ -115,6 +137,21 @@ export default function AdminLoginForm() {
           </>
         ) : (
           'Sign in to Admin'
+        )}
+      </Button>
+
+      {/* Development Login Button */}
+      <Button
+        type="button"
+        onClick={handleDevLogin}
+        disabled={isLoading}
+        className="h-11 w-full border border-slate-700 bg-slate-800/50 font-medium text-slate-300 transition-all duration-200 hover:bg-slate-800 hover:text-white"
+        variant="outline"
+      >
+        {isLoading ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          '🔧 Quick Dev Login (admin@example.com)'
         )}
       </Button>
     </form>
