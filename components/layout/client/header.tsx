@@ -2,11 +2,19 @@
 
 import type React from 'react';
 
-import { LoginButton } from '@/components/auth/login-button';
 import { CartButton } from '@/components/cart-button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
   NavigationMenu,
@@ -19,6 +27,8 @@ import {
 } from '@/components/ui/navigation-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { WishlistDrawer } from '@/components/wishlist-drawer';
+import { useAuth } from '@/context/auth-context';
+import { useModal } from '@/context/modal-context';
 import { useOnClickOutside } from '@/hooks/use-click-outside';
 import { allProducts } from '@/lib/product-data';
 import { cn } from '@/lib/utils';
@@ -37,11 +47,13 @@ import {
   Home,
   Laptop,
   Loader2,
+  LogIn,
   Menu,
   Search,
   ShirtIcon,
   ShoppingBag,
-  Sparkles
+  Sparkles,
+  User
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -85,6 +97,171 @@ const categoryIcons: Record<string, React.ReactNode> = {
 
 interface HeaderProps {
   categoryTree: Category[];
+}
+
+// Unified Profile Menu Component that works for both mobile and desktop
+function ProfileMenu({
+  variant = 'desktop'
+}: {
+  variant?: 'mobile' | 'desktop';
+}) {
+  const { user, logout, isLoading } = useAuth();
+  const { openLoginModal } = useModal();
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await logout();
+    setIsOpen(false);
+    router.push('/');
+  };
+
+  const handleLogin = () => {
+    openLoginModal();
+  };
+
+  const getInitials = () => {
+    if (user?.name) {
+      return user.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    return user?.email?.charAt(0).toUpperCase() || 'U';
+  };
+
+  if (isLoading) {
+    return (
+      <Button
+        variant="ghost"
+        size={variant === 'mobile' ? 'icon' : 'sm'}
+        disabled
+      >
+        <Loader2
+          className={cn(
+            'animate-spin',
+            variant === 'mobile' ? 'h-5 w-5' : 'mr-2 h-4 w-4'
+          )}
+        />
+        {variant === 'desktop' && 'Loading...'}
+      </Button>
+    );
+  }
+
+  if (!user) {
+    // Not logged in
+    if (variant === 'mobile') {
+      return (
+        <Button variant="ghost" size="icon" onClick={handleLogin}>
+          <LogIn className="h-5 w-5" />
+          <span className="sr-only">Sign in</span>
+        </Button>
+      );
+    }
+
+    return (
+      <Button variant="ghost" size="sm" onClick={handleLogin}>
+        <LogIn className="mr-2 h-4 w-4" />
+        Sign In
+      </Button>
+    );
+  }
+
+  // Logged in
+  if (variant === 'mobile') {
+    return (
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="relative">
+            <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
+              <AvatarFallback className="bg-primary/10 text-xs text-primary sm:text-sm">
+                {getInitials()}
+              </AvatarFallback>
+            </Avatar>
+            <span className="sr-only">Profile menu</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel>
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">
+                {user.name || 'User'}
+              </p>
+              <p className="text-xs leading-none text-muted-foreground">
+                {user.email}
+              </p>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => router.push('/account')}>
+            <User className="mr-2 h-4 w-4" />
+            <span>My Account</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/orders')}>
+            <ShoppingBag className="mr-2 h-4 w-4" />
+            <span>My Orders</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/wishlist')}>
+            <Heart className="mr-2 h-4 w-4" />
+            <span>Wishlist</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+            <LogIn className="mr-2 h-4 w-4" />
+            <span>Logout</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
+  // Desktop variant
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-2">
+          <Avatar className="h-6 w-6">
+            <AvatarFallback className="bg-primary/10 text-xs">
+              {getInitials()}
+            </AvatarFallback>
+          </Avatar>
+          <span className="hidden sm:inline">{user.name || 'Account'}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm font-medium leading-none">
+              {user.name || 'User'}
+            </p>
+            <p className="text-xs leading-none text-muted-foreground">
+              {user.email}
+            </p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push('/account')}>
+          <User className="mr-2 h-4 w-4" />
+          <span>My Account</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push('/orders')}>
+          <ShoppingBag className="mr-2 h-4 w-4" />
+          <span>My Orders</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push('/wishlist')}>
+          <Heart className="mr-2 h-4 w-4" />
+          <span>Wishlist</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+          <LogIn className="mr-2 h-4 w-4" />
+          <span>Logout</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 export function Header({ categoryTree }: HeaderProps) {
@@ -526,7 +703,14 @@ export function Header({ categoryTree }: HeaderProps) {
 
             <WishlistDrawer />
             <CartButton />
-            <LoginButton />
+
+            {/* Unified Profile Menu - Shows different variants based on screen size */}
+            <div className="lg:hidden">
+              <ProfileMenu variant="mobile" />
+            </div>
+            <div className="hidden lg:block">
+              <ProfileMenu variant="desktop" />
+            </div>
           </div>
         </div>
       </Container>

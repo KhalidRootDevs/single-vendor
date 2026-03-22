@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Button, type ButtonProps } from '@/components/ui/button';
-import { useModal } from '@/context/modal-context';
 import { useAuth } from '@/context/auth-context';
+import { useModal } from '@/context/modal-context';
 import { LogIn, LogOut, UserCircle } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 interface LoginButtonProps extends ButtonProps {
   showIcon?: boolean;

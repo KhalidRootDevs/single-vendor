@@ -15,7 +15,6 @@ import {
 export function LoginModal() {
   const { isLoginModalOpen, authMode, closeAuthModal } = useModal();
 
-  // Theme-aware styles
   const dialogContentClass = 'sm:max-w-[480px] p-0 gap-0 bg-background border';
   const cardClass = 'bg-transparent border shadow-none';
   const textMutedClass = 'text-muted-foreground';
