@@ -175,42 +175,36 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     }
   };
 
-  // Handle variant selection
-  const handleVariantSelect = (variantName: string, option: string) => {
-    const newSelectedOptions = {
+  // Check if a variant option is valid given current selections
+  const isVariantOptionValid = (
+    variantName: string,
+    option: string
+  ): boolean => {
+    const testOptions = {
       ...selectedOptions,
       [variantName]: option
     };
 
-    // If selecting this option would create an invalid combination, clear dependent options
-    const currentAttributes = Object.keys(newSelectedOptions);
-    const validVariants =
-      product?.variants.filter((variant) =>
-        currentAttributes.every(
-          (key) => newSelectedOptions[key] === variant.attributes[key]
+    // Check if any product variant matches this combination
+    return (
+      product?.variants.some((variant) =>
+        Object.entries(testOptions).every(
+          ([key, value]) => variant.attributes[key] === value
         )
-      ) || [];
+      ) || false
+    );
+  };
 
-    // Find which attributes are still valid
-    const validAttributes: Record<string, Set<string>> = {};
-    validVariants.forEach((variant) => {
-      Object.entries(variant.attributes).forEach(([key, value]) => {
-        if (!validAttributes[key]) {
-          validAttributes[key] = new Set();
-        }
-        validAttributes[key].add(value);
+  // Handle variant selection
+  const handleVariantSelect = (variantName: string, option: string) => {
+    // Only update if the option is valid (exists in product variants)
+    if (isVariantOptionValid(variantName, option)) {
+      setSelectedOptions({
+        ...selectedOptions,
+        [variantName]: option
       });
-    });
-
-    // Clear invalid selections
-    const cleanedOptions = { ...newSelectedOptions };
-    Object.keys(cleanedOptions).forEach((key) => {
-      if (!validAttributes[key]?.has(cleanedOptions[key])) {
-        delete cleanedOptions[key];
-      }
-    });
-
-    setSelectedOptions(cleanedOptions);
+    }
+    // If option is invalid, do nothing (don't clear selections)
   };
 
   // Check if all required variants are selected
@@ -469,36 +463,46 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           <p className="text-muted-foreground">{product.description}</p>
 
           {/* Grouped Variants */}
-          <div className="space-y-4">
+          <div className="space-y-3">
             {groupedVariants.map((variant, index) => (
               <div key={index}>
                 <div className="mb-2 flex items-center gap-2">
-                  <h3 className="font-medium capitalize">{variant.name}</h3>
+                  <h3 className="text-sm font-medium capitalize">
+                    {variant.name}
+                  </h3>
                   {variant.hasPriceVariation && (
-                    <span className="rounded bg-green-50 px-2 py-1 text-xs text-green-600">
-                      Affects price
+                    <span className="rounded bg-green-50 px-1.5 py-0.5 text-xs text-green-600">
+                      Price
                     </span>
                   )}
                   {variant.hasStockVariation && (
-                    <span className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-600">
-                      Affects stock
+                    <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600">
+                      Stock
                     </span>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {variant.options.map((option, optionIndex) => {
                     const isSelected = selectedOptions[variant.name] === option;
-                    const isValidOption = true; // You can add logic to disable invalid combinations
+                    const isValidOption = isVariantOptionValid(
+                      variant.name,
+                      option
+                    );
 
                     return (
                       <Button
                         key={optionIndex}
                         variant={isSelected ? 'default' : 'outline'}
-                        className="h-10 px-4"
+                        className="h-8 px-3 text-sm"
                         onClick={() =>
                           handleVariantSelect(variant.name, option)
                         }
                         disabled={!isValidOption}
+                        title={
+                          !isValidOption
+                            ? 'This combination is not available'
+                            : ''
+                        }
                       >
                         {option}
                       </Button>
@@ -559,7 +563,9 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                 className="flex-1"
                 size="lg"
                 onClick={handleAddToCart}
-                disabled={isAddingToCart || !isInStock}
+                disabled={
+                  isAddingToCart || !isInStock || !areAllVariantsSelected()
+                }
               >
                 {isAddingToCart ? (
                   <div className="flex items-center">
@@ -569,7 +575,11 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                 ) : (
                   <>
                     <ShoppingCart className="mr-2 h-5 w-5" />
-                    {isInStock ? 'Add to Cart' : 'Out of Stock'}
+                    {!areAllVariantsSelected()
+                      ? 'Select all options'
+                      : isInStock
+                      ? 'Add to Cart'
+                      : 'Out of Stock'}
                   </>
                 )}
               </Button>
@@ -578,7 +588,9 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                 className="flex-1"
                 size="lg"
                 onClick={handleBuyNow}
-                disabled={isAddingToCart || !isInStock}
+                disabled={
+                  isAddingToCart || !isInStock || !areAllVariantsSelected()
+                }
               >
                 Buy Now
               </Button>
