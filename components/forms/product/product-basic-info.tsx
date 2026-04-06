@@ -55,11 +55,15 @@ export default function ProductBasicInfo({
               id="name"
               placeholder="e.g., Premium T-Shirt"
               {...register("name")}
+              className={errors.name ? "border-red-500 focus-visible:ring-red-500" : ""}
             />
             {errors.name && (
-              <p className="text-sm text-red-500">
-                {errors?.name?.message as string}
-              </p>
+              <div className="flex gap-2 items-start">
+                <span className="text-red-500 text-xl leading-none mt-0.5">!</span>
+                <p className="text-sm text-red-500">
+                  {errors?.name?.message as string}
+                </p>
+              </div>
             )}
           </div>
           <div className="space-y-2">
@@ -71,7 +75,7 @@ export default function ProductBasicInfo({
               onValueChange={(value) => setValue("categoryId", value)}
               disabled={isLoadingCategories}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errors.categoryId ? "border-red-500" : ""}>
                 <SelectValue
                   placeholder={
                     isLoadingCategories
@@ -109,9 +113,12 @@ export default function ProductBasicInfo({
               </SelectContent>
             </Select>
             {errors.categoryId && (
-              <p className="text-sm text-red-500">
-                {errors.categoryId.message as string}
-              </p>
+              <div className="flex gap-2 items-start">
+                <span className="text-red-500 text-xl leading-none mt-0.5">!</span>
+                <p className="text-sm text-red-500">
+                  {errors.categoryId.message as string}
+                </p>
+              </div>
             )}
           </div>
         </div>
@@ -125,11 +132,15 @@ export default function ProductBasicInfo({
             placeholder="Describe your product..."
             rows={5}
             {...register("description")}
+            className={errors.description ? "border-red-500 focus-visible:ring-red-500" : ""}
           />
           {errors.description && (
-            <p className="text-sm text-red-500">
-              {errors.description.message as string}
-            </p>
+            <div className="flex gap-2 items-start">
+              <span className="text-red-500 text-xl leading-none mt-0.5">!</span>
+              <p className="text-sm text-red-500">
+                {errors.description.message as string}
+              </p>
+            </div>
           )}
         </div>
 
@@ -146,15 +157,18 @@ export default function ProductBasicInfo({
                 id="price"
                 type="number"
                 step="0.01"
-                className="pl-7"
+                className={`pl-7 ${errors.price ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                 placeholder="0.00"
                 {...register("price")}
               />
             </div>
             {errors.price && (
-              <p className="text-sm text-red-500">
-                {errors.price.message as string}
-              </p>
+              <div className="flex gap-2 items-start">
+                <span className="text-red-500 text-xl leading-none mt-0.5">!</span>
+                <p className="text-sm text-red-500">
+                  {errors.price.message as string}
+                </p>
+              </div>
             )}
           </div>
           <div className="space-y-2">
@@ -228,11 +242,15 @@ export default function ProductBasicInfo({
               type="number"
               placeholder="0"
               {...register("stock")}
+              className={errors.stock ? "border-red-500 focus-visible:ring-red-500" : ""}
             />
             {errors.stock && (
-              <p className="text-sm text-red-500">
-                {errors.stock.message as string}
-              </p>
+              <div className="flex gap-2 items-start">
+                <span className="text-red-500 text-xl leading-none mt-0.5">!</span>
+                <p className="text-sm text-red-500">
+                  {errors.stock.message as string}
+                </p>
+              </div>
             )}
           </div>
         </div>
