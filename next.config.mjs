@@ -14,6 +14,7 @@ const nextConfig = {
       },
     ],
   },
-}
+};
 
-export default nextConfig
+// Force rebuild with clean config
+export default nextConfig;
