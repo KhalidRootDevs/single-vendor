@@ -152,6 +152,8 @@ export function ProductForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [availableImages, setAvailableImages] = useState<string[]>([]);
+  const [existingImages, setExistingImages] = useState<string[]>([]);
+  const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
 
   const methods = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -256,11 +258,13 @@ export function ProductForm({
         },
       });
 
-      // Set images
+      // Set images - track existing vs new
       if (product.images && product.images.length > 0) {
         setMainImage(product.images[0]);
         setAdditionalImages(product.images.slice(1));
         setAvailableImages(product.images);
+        setExistingImages(product.images);
+        setImagesToDelete([]);
       }
     }
   }, [product, isEditing, reset]);
@@ -311,9 +315,22 @@ export function ProductForm({
     }
   };
 
-  const removeImage = (index: number) => {
+  const removeImage = (index: number, imageUrl?: string) => {
     setAdditionalImages((prev) => prev.filter((_, i) => i !== index));
     setAvailableImages((prev) => prev.filter((_, i) => i !== index + 1));
+    
+    // Track deletion of existing images
+    if (imageUrl && existingImages.includes(imageUrl)) {
+      setImagesToDelete((prev) => [...prev, imageUrl]);
+    }
+  };
+
+  const restoreImage = (imageUrl: string) => {
+    if (imagesToDelete.includes(imageUrl)) {
+      setImagesToDelete((prev) => prev.filter((img) => img !== imageUrl));
+      setAdditionalImages((prev) => [...prev, imageUrl]);
+      setAvailableImages((prev) => [...prev, imageUrl]);
+    }
   };
 
   const onSubmit = async (data: ProductFormValues) => {
@@ -340,14 +357,24 @@ export function ProductForm({
         }
       });
 
-      // Append images
+      // Append new images
       if (imageFiles.length > 0) {
         imageFiles.forEach((file) => {
           formData.append("images", file);
         });
-      } else if (isEditing && mainImage) {
-        // For updates, indicate to keep existing images
-        formData.append("keepExistingImages", "true");
+      }
+      
+      // For updates, track which images to delete
+      if (isEditing && imagesToDelete.length > 0) {
+        formData.append("imagesToDelete", JSON.stringify(imagesToDelete));
+      } else if (isEditing && imageFiles.length === 0) {
+        // If no new images, keep all existing except deleted ones
+        const imagesToKeep = existingImages.filter(
+          (img) => !imagesToDelete.includes(img)
+        );
+        if (imagesToKeep.length > 0) {
+          formData.append("imagesToKeep", JSON.stringify(imagesToKeep));
+        }
       }
 
       const url =
@@ -506,12 +533,18 @@ export function ProductForm({
                 setMainImage={setMainImage}
                 setAvailableImages={setAvailableImages}
                 setImageFiles={setImageFiles}
+                isEditing={isEditing}
+                existingImages={existingImages}
+                imagesToDelete={imagesToDelete}
               />
 
               <ProductAdditionalImage
                 additionalImages={additionalImages}
                 removeImage={removeImage}
+                restoreImage={restoreImage}
                 handleAdditionalImagesChange={handleAdditionalImagesChange}
+                imagesToDelete={imagesToDelete}
+                existingImages={existingImages}
               />
             </TabsContent>
 

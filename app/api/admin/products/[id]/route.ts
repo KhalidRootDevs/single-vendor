@@ -100,7 +100,12 @@ export async function PUT(
       : undefined;
 
     const imageFiles = formData.getAll("images") as File[];
-    const keepExistingImages = formData.get("keepExistingImages") === "true";
+    const imagesToDelete = formData.get("imagesToDelete")
+      ? JSON.parse(formData.get("imagesToDelete") as string)
+      : [];
+    const imagesToKeep = formData.get("imagesToKeep")
+      ? JSON.parse(formData.get("imagesToKeep") as string)
+      : [];
 
     const product = await Product.findById(params.id);
     if (!product) {
@@ -152,7 +157,18 @@ export async function PUT(
       }
     }
 
-    let imageUrls = keepExistingImages ? product.images : [];
+    // Determine which images to keep
+    let imageUrls: string[] = [];
+    
+    // If there are specific images to keep, use those
+    if (imagesToKeep.length > 0) {
+      imageUrls = imagesToKeep;
+    } else if (imageFiles.length === 0) {
+      // If no new images uploaded and no images to keep specified, keep all except deleted
+      imageUrls = product.images.filter(
+        (img: string) => !imagesToDelete.includes(img)
+      );
+    }
 
     // Upload new product-level images
     if (imageFiles.length > 0) {
@@ -166,6 +182,19 @@ export async function PUT(
             { error: "Failed to upload images" },
             { status: 500 }
           );
+        }
+      }
+    }
+
+    // Delete images marked for deletion from Cloudinary
+    for (const imageUrl of imagesToDelete) {
+      const publicId = extractPublicIdFromUrl(imageUrl);
+      if (publicId) {
+        try {
+          await deleteFromCloudinary(publicId);
+        } catch (deleteError) {
+          console.error("Image deletion error:", deleteError);
+          // Continue processing even if deletion fails
         }
       }
     }
