@@ -43,7 +43,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    verifyToken(token); // Verify but don't use decoded for now
+    const decoded = verifyToken(token);
+    if (decoded.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const formData = await request.formData();
 
@@ -162,7 +165,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    verifyToken(token); // Verify but don't use decoded for now
+    const decoded = verifyToken(token);
+    if (decoded.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const category = await Category.findById(params.id);
     if (!category) {

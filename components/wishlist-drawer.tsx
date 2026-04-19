@@ -22,9 +22,9 @@ export function WishlistDrawer() {
   const { items, removeItem, itemCount, clearWishlist } = useWishlist();
   const { addItem: addToCart } = useCart();
   const [isOpen, setIsOpen] = useState(false);
-  const [removingItemId, setRemovingItemId] = useState<number | null>(null);
+  const [removingItemId, setRemovingItemId] = useState<string | null>(null);
 
-  const handleRemoveWithAnimation = (id: number) => {
+  const handleRemoveWithAnimation = (id: string) => {
     setRemovingItemId(id);
     setTimeout(() => {
       removeItem(id);
@@ -34,7 +34,6 @@ export function WishlistDrawer() {
 
   const handleAddToCart = (item: (typeof items)[0]) => {
     addToCart({
-      id: Date.now(),
       productId: item.id,
       name: item.name,
       price: item.price,

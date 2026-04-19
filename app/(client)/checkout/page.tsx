@@ -56,7 +56,7 @@ const shippingMethods = [
 ];
 
 export default function CheckoutPage() {
-  const { items, subtotal, shipping, tax, total, clearCart } = useCart();
+  const { items, subtotal, tax, clearCart } = useCart();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
@@ -229,34 +229,30 @@ export default function CheckoutPage() {
     }
   }, [sameAsShipping, shippingAddress, setValue]);
 
-  // Update shipping cost when shipping method changes
-  useEffect(() => {
-    const selectedMethod = shippingMethods.find(
-      (method) => method.id === shippingMethod
-    );
-    if (selectedMethod) {
-      console.log('Selected shipping method:', selectedMethod);
-    }
-  }, [shippingMethod]);
+  const selectedShippingMethodObj =
+    shippingMethods.find((m) => m.id === shippingMethod) ?? shippingMethods[0];
+  const selectedShippingCost = selectedShippingMethodObj.price;
+  const orderTotal = subtotal + tax + selectedShippingCost;
 
   const createPaymentIntent = async () => {
     try {
       setCreatingPaymentIntent(true);
       setStripeError('');
 
-      if (!total || total <= 0) throw new Error('Invalid order total');
+      if (!orderTotal || orderTotal <= 0)
+        throw new Error('Invalid order total');
 
       const response = await fetch('/api/create-payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: total,
+          amount: orderTotal,
           currency: 'usd',
           metadata: {
             orderItems: items.length.toString(),
             customerEmail: contactInfo.email || 'guest@example.com',
             customerName: contactInfo.fullName,
-            orderTotal: total.toString()
+            orderTotal: orderTotal.toString()
           }
         })
       });
@@ -361,13 +357,12 @@ export default function CheckoutPage() {
             }
           : undefined,
         productId: item.productId,
-        sku: item.sku || `${item.productId}-default`
+        sku: item.variantSku || `${item.productId}-default`
       }));
 
-      // Get selected shipping method details
-      const selectedShippingMethod = shippingMethods.find(
-        (method) => method.id === data.shippingMethod
-      );
+      const selectedShippingMethod =
+        shippingMethods.find((method) => method.id === data.shippingMethod) ??
+        shippingMethods[0];
 
       const billingAddressData = sameAsShipping
         ? {
@@ -391,9 +386,15 @@ export default function CheckoutPage() {
       let paymentStatus: 'pending' | 'paid' | 'failed' = 'pending';
       if (data.paymentMethod === 'cash_on_delivery') {
         paymentStatus = 'pending';
-      } else if (data.paymentMethod === 'credit_card' || data.paymentMethod === 'debit_card') {
+      } else if (
+        data.paymentMethod === 'credit_card' ||
+        data.paymentMethod === 'debit_card'
+      ) {
         // For card payments, only set to 'paid' if we have a successful payment intent
-        paymentStatus = paymentIntent && paymentIntent.status === 'succeeded' ? 'paid' : 'pending';
+        paymentStatus =
+          paymentIntent && paymentIntent.status === 'succeeded'
+            ? 'paid'
+            : 'pending';
       } else {
         // For other payment methods, default to pending
         paymentStatus = 'pending';
@@ -421,15 +422,13 @@ export default function CheckoutPage() {
         paymentMethod: data.paymentMethod,
         paymentStatus: paymentStatus,
         paymentIntentId: paymentIntent?.id || paymentIntentId,
-        shippingMethod: selectedShippingMethod?.name || 'Standard Shipping',
+        shippingMethod: selectedShippingMethod.id,
         notes: data.notes,
         subtotal,
         tax,
-        shipping: selectedShippingMethod?.price || shipping,
-        total: total + (selectedShippingMethod?.price || 0) - shipping
+        shipping: selectedShippingMethod.price,
+        total: subtotal + tax + selectedShippingMethod.price
       };
-
-      console.log('📦 Sending order data to /api/orders:', orderData);
 
       const response = await fetch('/api/orders', {
         method: 'POST',
@@ -438,7 +437,6 @@ export default function CheckoutPage() {
       });
 
       const result = await response.json();
-      console.log('✅ Order API response:', result);
 
       if (!response.ok)
         throw new Error(result.error || 'Failed to create order');
@@ -464,19 +462,15 @@ export default function CheckoutPage() {
 
   const handleStripeSuccess = (paymentIntent: any) => {
     const formData = getValues();
-
-    console.log('✅ Stripe payment success, intent:', paymentIntent);
     processOrder(formData, paymentIntent);
   };
 
   const handleStripeError = (error: string) => {
-    console.error('❌ Stripe payment error:', error);
     setStripeError(error);
     setShowPaymentModal(false);
   };
 
   const handlePaymentMethodChange = (value: string) => {
-    console.log('🔄 Setting payment method to:', value);
     setValue(
       'paymentMethod',
       value as 'credit_card' | 'debit_card' | 'paypal' | 'cash_on_delivery'
@@ -513,7 +507,7 @@ export default function CheckoutPage() {
           </div>
           <div className="flex justify-between">
             <span>Total:</span>
-            <span className="font-medium">${total.toFixed(2)}</span>
+            <span className="font-medium">${orderTotal.toFixed(2)}</span>
           </div>
           {paymentIntentId && (
             <div className="mt-2 flex justify-between">
@@ -622,15 +616,15 @@ export default function CheckoutPage() {
                     >
                       {savedAddresses.map((address) => (
                         <div
-                          key={address._id}
+                          key={address._id ?? address.label}
                           className="flex items-start space-x-2 rounded-md border p-3"
                         >
                           <RadioGroupItem
-                            value={address._id}
-                            id={address._id}
+                            value={address._id ?? ''}
+                            id={address._id ?? address.label}
                           />
                           <Label
-                            htmlFor={address._id}
+                            htmlFor={address._id ?? address.label}
                             className="flex-1 cursor-pointer"
                           >
                             <div className="font-medium">{address.label}</div>
@@ -1112,19 +1106,17 @@ export default function CheckoutPage() {
                   <span>${subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Shipping</span>
-                  <span>
-                    {shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}
-                  </span>
+                  <span>Shipping ({selectedShippingMethodObj.name})</span>
+                  <span>${selectedShippingCost.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Tax</span>
+                  <span>Tax (8%)</span>
                   <span>${tax.toFixed(2)}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-lg font-medium">
                   <span>Total</span>
-                  <span>${total.toFixed(2)}</span>
+                  <span>${orderTotal.toFixed(2)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -1142,7 +1134,7 @@ export default function CheckoutPage() {
             </DialogTitle>
             <DialogDescription>
               Enter your card details to complete the payment of $
-              {total.toFixed(2)}
+              {orderTotal.toFixed(2)}
             </DialogDescription>
           </DialogHeader>
 

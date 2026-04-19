@@ -44,7 +44,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    verifyToken(token);
+    const decodedPut = verifyToken(token);
+    if (decodedPut.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const formData = await request.formData();
 
@@ -259,7 +262,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    verifyToken(token);
+    const decodedDel = verifyToken(token);
+    if (decodedDel.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const product = await Product.findById(params.id);
     if (!product) {

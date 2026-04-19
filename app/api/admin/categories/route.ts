@@ -16,6 +16,10 @@ export async function POST(request: NextRequest) {
 
     const decoded = verifyToken(token);
 
+    if (decoded.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const formData = await request.formData();
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;

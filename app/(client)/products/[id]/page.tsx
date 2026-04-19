@@ -264,10 +264,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
 
     setIsAddingToCart(true);
 
-    // Simulate a slight delay for better UX
-    setTimeout(() => {
+    try {
       addItem({
-        id: selectedVariant?.sku || product._id,
         productId: product._id,
         name: product.name,
         price: displayPrice,
@@ -275,7 +273,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         image: displayImage || product.images[0],
         variant: formatSelectedVariants(),
         selectedOptions,
-        variantSku: selectedVariant?.sku
+        variantSku: selectedVariant?.sku,
+        maxStock: displayStock
       });
 
       toast({
@@ -284,18 +283,38 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           formatSelectedVariants() ? ` (${formatSelectedVariants()})` : ''
         } has been added to your cart.`
       });
-
+    } finally {
       setIsAddingToCart(false);
-    }, 600);
+    }
   };
 
   // Handle buy now
-  const handleBuyNow = () => {
-    handleAddToCart();
-    // Navigate to checkout after a short delay
-    setTimeout(() => {
-      router.push('/checkout');
-    }, 800);
+  const handleBuyNow = async () => {
+    if (!product) return;
+
+    if (!areAllVariantsSelected()) {
+      toast({
+        title: 'Please select all options',
+        description:
+          'You need to select all product options before proceeding.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    addItem({
+      productId: product._id,
+      name: product.name,
+      price: displayPrice,
+      quantity,
+      image: displayImage || product.images[0],
+      variant: formatSelectedVariants(),
+      selectedOptions,
+      variantSku: selectedVariant?.sku,
+      maxStock: displayStock
+    });
+
+    router.push('/checkout');
   };
 
   // Loading state

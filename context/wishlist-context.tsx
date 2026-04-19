@@ -10,7 +10,7 @@ import {
 import { toast } from '@/components/ui/use-toast';
 
 interface WishlistItem {
-  id: number;
+  id: string;
   name: string;
   price: number;
   image: string;
@@ -20,8 +20,8 @@ interface WishlistItem {
 interface WishlistContextType {
   items: WishlistItem[];
   addItem: (item: WishlistItem) => void;
-  removeItem: (id: number) => void;
-  isInWishlist: (id: number) => boolean;
+  removeItem: (id: string) => void;
+  isInWishlist: (id: string) => boolean;
   clearWishlist: () => void;
   itemCount: number;
 }
@@ -72,7 +72,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   };
 
   // Remove item from wishlist
-  const removeItem = (id: number) => {
+  const removeItem = (id: string) => {
     const item = items.find((item) => item.id === id);
     setItems((prev) => prev.filter((item) => item.id !== id));
 
@@ -85,7 +85,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
   };
 
   // Check if item is in wishlist
-  const isInWishlist = (id: number) => {
+  const isInWishlist = (id: string) => {
     return items.some((item) => item.id === id);
   };
 
@@ -117,14 +117,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
 export function useWishlist() {
   const context = useContext(WishlistContext);
   if (context === undefined) {
-    return {
-      items: [],
-      addItem: () => {},
-      removeItem: () => {},
-      isInWishlist: () => false,
-      clearWishlist: () => {},
-      itemCount: 0
-    };
+    throw new Error('useWishlist must be used within a WishlistProvider');
   }
   return context;
 }

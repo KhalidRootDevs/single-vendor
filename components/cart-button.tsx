@@ -34,19 +34,19 @@ import { cn } from '@/lib/utils';
 // Mock recommended products
 const recommendedProducts = [
   {
-    id: 101,
+    id: 'mock-101',
     name: 'Wireless Earbuds',
     price: 49.99,
     image: '/placeholder.svg?height=80&width=80'
   },
   {
-    id: 102,
+    id: 'mock-102',
     name: 'Phone Case',
     price: 19.99,
     image: '/placeholder.svg?height=80&width=80'
   },
   {
-    id: 103,
+    id: 'mock-103',
     name: 'Charging Cable',
     price: 12.99,
     image: '/placeholder.svg?height=80&width=80'
@@ -126,9 +126,9 @@ export function CartButton() {
       newSavedItems.splice(index, 1);
       setSavedItems(newSavedItems);
 
-      // Add back to cart
-      const { id, ...itemWithoutId } = item;
-      addItem({ ...itemWithoutId, id: Date.now() });
+      // Add back to cart (id is auto-assigned by addItem)
+      const { id: _id, ...itemWithoutId } = item;
+      addItem(itemWithoutId);
 
       toast({
         title: 'Item moved to cart',
@@ -380,7 +380,6 @@ export function CartButton() {
                           className="h-auto p-0 text-xs"
                           onClick={() => {
                             addItem({
-                              id: Date.now(),
                               productId: product.id,
                               name: product.name,
                               price: product.price,

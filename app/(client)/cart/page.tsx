@@ -16,6 +16,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Container } from '@/components/ui/container';
+import toast from 'react-hot-toast';
 
 export default function CartPage() {
   const { items, updateQuantity, removeItem, subtotal, shipping, tax, total } =
@@ -23,17 +24,28 @@ export default function CartPage() {
   const [promoCode, setPromoCode] = useState('');
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
 
-  const handleApplyPromo = () => {
-    if (!promoCode) return;
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim()) return;
 
     setIsApplyingPromo(true);
+    try {
+      const response = await fetch('/api/promo/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode.trim() })
+      });
 
-    // Simulate API call to validate promo code
-    setTimeout(() => {
+      if (response.ok) {
+        toast.success(`Promo code "${promoCode}" applied!`);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || 'Invalid or expired promo code.');
+      }
+    } catch {
+      toast.error('Unable to validate promo code. Please try again.');
+    } finally {
       setIsApplyingPromo(false);
-      // For demo purposes, we'll just show an alert
-      alert(`Promo code "${promoCode}" applied!`);
-    }, 1000);
+    }
   };
 
   if (items.length === 0) {

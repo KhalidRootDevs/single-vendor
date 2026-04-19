@@ -14,10 +14,10 @@ import { toast } from '@/components/ui/use-toast';
 export default function WishlistPage() {
   const { items, removeItem, clearWishlist } = useWishlist();
   const { addItem: addToCart } = useCart();
-  const [removingItemId, setRemovingItemId] = useState<number | null>(null);
-  const [addingToCartId, setAddingToCartId] = useState<number | null>(null);
+  const [removingItemId, setRemovingItemId] = useState<string | null>(null);
+  const [addingToCartId, setAddingToCartId] = useState<string | null>(null);
 
-  const handleRemoveWithAnimation = (id: number) => {
+  const handleRemoveWithAnimation = (id: string) => {
     setRemovingItemId(id);
     setTimeout(() => {
       removeItem(id);
@@ -28,25 +28,21 @@ export default function WishlistPage() {
   const handleAddToCart = (item: (typeof items)[0]) => {
     setAddingToCartId(item.id);
 
-    // Simulate a slight delay for better UX
-    setTimeout(() => {
-      addToCart({
-        id: Date.now(),
-        productId: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: 1,
-        image: item.image,
-        variant: 'Default'
-      });
+    addToCart({
+      productId: item.id,
+      name: item.name,
+      price: item.price,
+      quantity: 1,
+      image: item.image,
+      variant: 'Default'
+    });
 
-      toast({
-        title: 'Added to cart',
-        description: `${item.name} has been added to your cart.`
-      });
+    toast({
+      title: 'Added to cart',
+      description: `${item.name} has been added to your cart.`
+    });
 
-      setAddingToCartId(null);
-    }, 600);
+    setAddingToCartId(null);
   };
 
   if (items.length === 0) {

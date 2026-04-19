@@ -4,8 +4,17 @@ import { Product } from '@/models/Product';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 import { User } from '@/models/User';
-import { Mongoose } from 'mongoose';
+import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
+
+const TAX_RATE = 0.08;
+
+const SHIPPING_METHODS: Record<string, number> = {
+  standard: 5.99,
+  express: 12.99,
+  overnight: 24.99
+};
 
 /**
  * POST /api/orders
@@ -28,8 +37,6 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-
-    console.log('body', body);
 
     const {
       items,
@@ -86,11 +93,11 @@ export async function POST(request: NextRequest) {
         isGuest = false;
       } else if (createAccount) {
         // Create new user account for guest
-        const password = Math.random().toString(36).slice(-8); // Generate random password
+        const password = randomBytes(8).toString('hex');
         const hashedPassword = await bcrypt.hash(password, 12);
 
         const newUser = new User({
-          name: shippingAddress.fullName,
+          name: customer?.name || shippingAddress.fullName,
           email: customer?.email.toLowerCase(),
           password: hashedPassword,
           role: 'user',
@@ -119,11 +126,9 @@ export async function POST(request: NextRequest) {
 
         // TODO: Send welcome email with password
         // await sendWelcomeEmail(guestEmail, shippingAddress.fullName, password);
-
-        console.log(`🎉 Created guest account for: ${customer?.email}`);
       } else {
         // Create order without user account (true guest checkout)
-        userId = new Mongoose.Types.ObjectId(); // Generate a temporary ID
+        userId = new mongoose.Types.ObjectId();
         userEmail = customer?.email;
         isGuest = true;
       }
@@ -189,9 +194,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Calculate tax and shipping
-    const tax = subtotal * 0.1; // 10% tax
-    const shipping = shippingMethod === 'express' ? 15 : 5;
+    // Calculate tax and shipping server-side (source of truth)
+    const tax = subtotal * TAX_RATE;
+    const shipping =
+      SHIPPING_METHODS[shippingMethod] ?? SHIPPING_METHODS.standard;
     const total = subtotal + tax + shipping;
 
     // Generate order number
@@ -220,8 +226,9 @@ export async function POST(request: NextRequest) {
       shipping,
       total,
       paymentMethod,
-      paymentStatus: paymentStatus || 'pending', // Use paymentStatus from request, default to pending
-      paymentIntentId: paymentIntentId || undefined, // Store Stripe payment intent ID if provided
+      // Only trust 'paid' status when a verified paymentIntentId is present
+      paymentStatus: paymentIntentId ? paymentStatus || 'paid' : 'pending',
+      paymentIntentId: paymentIntentId || undefined,
       cardDetails,
       shippingMethod,
       shippingAddress,
@@ -235,24 +242,24 @@ export async function POST(request: NextRequest) {
     // Update product stock
     for (const item of validatedItems) {
       const product = await Product.findById(item.productId);
+      if (!product) continue;
 
       if (item.variant && item.variant.attributes) {
-        // Update variant stock
-        const variantIndex = product.variants.findIndex((v) => {
-          return Object.keys(item.variant.attributes).every(
-            (key) => v.attributes[key] === item.variant.attributes[key]
-          );
-        });
-
+        const variantIndex = product.variants.findIndex((v: any) =>
+          Object.keys(item.variant.attributes).every(
+            (key: string) => v.attributes[key] === item.variant.attributes[key]
+          )
+        );
         if (variantIndex !== -1) {
-          product.variants[variantIndex].stock -= item.quantity;
+          product.variants[variantIndex].stock = Math.max(
+            0,
+            (product.variants[variantIndex].stock ?? 0) - item.quantity
+          );
         }
       } else {
-        // Update base product stock
-        product.stock -= item.quantity;
+        product.stock = Math.max(0, product.stock - item.quantity);
       }
 
-      // Increment sales count
       product.salesCount += item.quantity;
       await product.save();
     }

@@ -192,11 +192,11 @@ export interface Order {
 // ============================================================================
 
 export interface ProductVariant {
-  name: string;
-  options: string;
+  sku?: string;
+  attributes: Record<string, string>;
   price?: number;
   stock?: number;
-  sku?: string;
+  image?: string;
 }
 
 export interface ProductSEO {
@@ -352,11 +352,13 @@ export interface CustomDeleteModalProps {
 
 export interface CartItem {
   id: number;
-  productId: number;
+  productId: string;
   name: string;
   price: number;
   quantity: number;
   image: string;
   variant: string;
   selectedOptions?: Record<string, string>;
+  variantSku?: string;
+  maxStock?: number;
 }

@@ -11,7 +11,7 @@ import { toast } from '@/components/ui/use-toast';
 
 interface WishlistButtonProps {
   product: {
-    id: number;
+    id: string;
     name: string;
     price: number;
     image: string;
@@ -37,7 +37,7 @@ export function WishlistButton({
   const { items, addItem, removeItem } = useWishlist();
   const [isAnimating, setIsAnimating] = useState(false);
 
-  const isInWishlist = items.some((item) => item.productId === product.id);
+  const isInWishlist = items.some((item) => item.id === product.id);
 
   const toggleWishlist = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -57,12 +57,11 @@ export function WishlistButton({
       });
     } else {
       addItem({
-        id: Date.now(),
-        productId: product.id,
+        id: product.id,
         name: product.name,
         price: product.price,
         image: product.image,
-        category: product.category
+        category: product.category ?? ''
       });
       toast({
         title: 'Added to wishlist',

@@ -6,7 +6,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 interface CartContextType {
   items: CartItem[];
-  addItem: (item: CartItem) => void;
+  addItem: (item: Omit<CartItem, 'id'>) => void;
   updateQuantity: (id: number, quantity: number) => void;
   removeItem: (id: number) => void;
   clearCart: () => void;
@@ -54,9 +54,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const total = subtotal + shipping + tax;
 
   // Add item to cart
-  const addItem = (newItem: CartItem) => {
+  const addItem = (newItem: Omit<CartItem, 'id'>) => {
     setItems((prevItems) => {
-      // Check if item already exists in cart
       const existingItemIndex = prevItems.findIndex(
         (item) =>
           item.productId === newItem.productId &&
@@ -64,14 +63,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       );
 
       if (existingItemIndex >= 0) {
-        // Update quantity if item exists
-        const updatedItems = [...prevItems];
-        updatedItems[existingItemIndex].quantity += newItem.quantity;
-        return updatedItems;
-      } else {
-        // Add new item if it doesn't exist
-        return [...prevItems, { ...newItem, id: Date.now() }];
+        const existing = prevItems[existingItemIndex];
+        const newQty = existing.quantity + newItem.quantity;
+        const maxQty = newItem.maxStock ?? existing.maxStock ?? Infinity;
+        const clampedQty = Math.min(newQty, maxQty);
+        return prevItems.map((item, idx) =>
+          idx === existingItemIndex ? { ...item, quantity: clampedQty } : item
+        );
       }
+
+      return [...prevItems, { ...newItem, id: Date.now() }];
     });
   };
 
@@ -79,7 +80,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const updateQuantity = (id: number, quantity: number) => {
     if (quantity < 1) return;
     setItems((prevItems) =>
-      prevItems.map((item) => (item.id === id ? { ...item, quantity } : item))
+      prevItems.map((item) => {
+        if (item.id !== id) return item;
+        const maxQty = item.maxStock ?? Infinity;
+        return { ...item, quantity: Math.min(quantity, maxQty) };
+      })
     );
   };
 
@@ -117,19 +122,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 export function useCart() {
   const context = useContext(CartContext);
   if (context === undefined) {
-    // Return a default empty cart state instead of throwing an error
-    return {
-      items: [],
-      addItem: () => {},
-      updateQuantity: () => {},
-      removeItem: () => {},
-      clearCart: () => {},
-      itemCount: 0,
-      subtotal: 0,
-      shipping: 0,
-      tax: 0,
-      total: 0
-    };
+    throw new Error('useCart must be used within a CartProvider');
   }
   return context;
 }
