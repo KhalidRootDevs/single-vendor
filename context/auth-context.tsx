@@ -7,6 +7,14 @@ import {
   useEffect,
   type ReactNode
 } from 'react';
+import toast from 'react-hot-toast';
+
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  google_cancelled: 'Google sign-in was cancelled.',
+  email_not_verified: 'Your Google account email is not verified.',
+  account_suspended: 'Your account has been suspended. Please contact support.',
+  server_error: 'Something went wrong during sign-in. Please try again.'
+};
 
 interface User {
   id: string;
@@ -20,6 +28,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
+  loginWithGoogle: () => void;
   register: (name: string, email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   isLoading: boolean;
@@ -53,6 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loginWithGoogle = () => {
+    window.location.href = '/api/auth/google';
   };
 
   // Login function
@@ -140,14 +153,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Check auth on component mount
+  // Check auth on mount and handle Google OAuth redirect results
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authSuccess = params.get('auth_success');
+    const authError = params.get('auth_error');
+
+    if (authSuccess || authError) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    if (authError) {
+      const msg =
+        AUTH_ERROR_MESSAGES[authError] ?? 'Sign-in failed. Please try again.';
+      toast.error(msg);
+    }
+
     checkAuth();
   }, []);
 
   const value: AuthContextType = {
     user,
     login,
+    loginWithGoogle,
     register,
     logout,
     isLoading,

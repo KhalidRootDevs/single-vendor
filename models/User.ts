@@ -54,7 +54,8 @@ export interface INote {
 export interface IUser extends Document {
   name: string;
   email: string;
-  password: string;
+  password?: string;
+  googleId?: string;
   phone?: string;
   avatar?: string;
   role: UserRole;
@@ -230,8 +231,15 @@ const userSchema = new Schema<IUser>(
     },
     password: {
       type: String,
-      required: [true, 'Password is required'],
+      required: function (this: IUser) {
+        return !this.googleId;
+      },
       minlength: [6, 'Password must be at least 6 characters']
+    },
+    googleId: {
+      type: String,
+      trim: true,
+      sparse: true
     },
     phone: {
       type: String,
@@ -301,7 +309,7 @@ const userSchema = new Schema<IUser>(
 
 // Hash password before saving
 userSchema.pre<IUser>('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
 
   try {
     const salt = await bcrypt.genSalt(12);
@@ -328,6 +336,7 @@ userSchema.pre('save', function (next) {
 userSchema.methods.comparePassword = async function (
   candidatePassword: string
 ): Promise<boolean> {
+  if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
 
@@ -472,6 +481,7 @@ userSchema.statics.convertGuestToRegular = async function (
 
 // Index for efficient queries
 userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ status: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ guestAccount: 1 });
