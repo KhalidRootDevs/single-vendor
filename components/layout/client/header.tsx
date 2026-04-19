@@ -199,7 +199,7 @@ function ProfileMenu({
             <User className="mr-2 h-4 w-4" />
             <span>My Account</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push('/orders')}>
+          <DropdownMenuItem onClick={() => router.push('/account/orders')}>
             <ShoppingBag className="mr-2 h-4 w-4" />
             <span>My Orders</span>
           </DropdownMenuItem>
