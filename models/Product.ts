@@ -217,15 +217,31 @@ productSchema.pre<IProduct>('save', function (next) {
   next();
 });
 
-// Indexes
+// Equality / cardinality indexes
 productSchema.index({ categoryId: 1, active: 1 });
 productSchema.index({ barcode: 1 });
-productSchema.index({ tags: 1 });
-productSchema.index({ featured: 1, active: 1 });
-productSchema.index({ name: 'text', description: 'text' });
+productSchema.index({ brand: 1, active: 1 });
 
-// Optional: index variant attributes (PostgreSQL-style not possible, but can flatten for search)
-productSchema.index({ 'variants.attributes': 1 });
+// Compound indexes that cover the most common query + sort patterns.
+// Each leads with `active` because every public query filters on it.
+productSchema.index({ active: 1, featured: -1, createdAt: -1 }); // default "featured" sort
+productSchema.index({ active: 1, createdAt: -1 }); // newest sort
+productSchema.index({ active: 1, salesCount: -1 }); // best-selling sort
+productSchema.index({ active: 1, rating: -1 }); // rating sort
+productSchema.index({ active: 1, price: 1 }); // price-asc sort + range filter
+productSchema.index({ active: 1, price: -1 }); // price-desc sort
+
+// Full-text search across name, tags (high weight) and description (low weight).
+// NOTE: MongoDB allows only one text index per collection.
+// If upgrading from the old { name: 'text', description: 'text' } index, drop it first:
+//   db.products.dropIndex('name_text_description_text')
+productSchema.index(
+  { name: 'text', tags: 'text', description: 'text' },
+  {
+    weights: { name: 10, tags: 5, description: 1 },
+    name: 'product_text_search'
+  }
+);
 
 // Virtual slug
 productSchema.virtual('slug').get(function () {

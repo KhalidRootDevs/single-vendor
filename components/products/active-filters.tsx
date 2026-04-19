@@ -2,15 +2,26 @@
 
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
-import type { Category, Brand } from '@/lib/product-data';
+
+interface FilterCategory {
+  _id?: string;
+  id?: string;
+  name: string;
+  slug?: string;
+}
+
+interface FilterBrand {
+  id: string;
+  name: string;
+}
 
 interface ActiveFiltersProps {
   searchQuery: string;
   selectedCategories: string[];
   selectedBrands: string[];
   priceRange: [number, number];
-  categories: Category[];
-  brands: Brand[];
+  categories: FilterCategory[];
+  brands: (FilterBrand | string)[];
   onRemoveSearchQuery: () => void;
   onRemoveCategory: (categoryId: string, checked: boolean) => void;
   onRemoveBrand: (brandId: string, checked: boolean) => void;
@@ -35,7 +46,7 @@ export function ActiveFilters({
     (searchQuery ? 1 : 0) +
     selectedCategories.length +
     selectedBrands.length +
-    (priceRange[0] > 0 || priceRange[1] < 200 ? 1 : 0);
+    (priceRange[0] > 0 || priceRange[1] < 1000 ? 1 : 0);
 
   if (activeFilterCount === 0) return null;
 
@@ -56,24 +67,30 @@ export function ActiveFilters({
           </Button>
         )}
 
-        {selectedCategories.map((categoryId) => {
-          const category = categories.find((c) => c.id === categoryId);
+        {selectedCategories.map((slug) => {
+          const category = categories.find(
+            (c) => c.slug === slug || c.id === slug || c._id === slug
+          );
           return (
             <Button
-              key={categoryId}
+              key={slug}
               variant="secondary"
               size="sm"
               className="h-7 gap-1 text-xs"
-              onClick={() => onRemoveCategory(categoryId, false)}
+              onClick={() => onRemoveCategory(slug, false)}
             >
-              Category: {category?.name}
+              {category?.name ?? slug}
               <X className="h-3 w-3" />
             </Button>
           );
         })}
 
         {selectedBrands.map((brandId) => {
-          const brand = brands.find((b) => b.id === brandId);
+          const brand = brands.find((b) =>
+            typeof b === 'string' ? b === brandId : b.id === brandId
+          );
+          const brandName =
+            typeof brand === 'string' ? brand : brand?.name ?? brandId;
           return (
             <Button
               key={brandId}
@@ -82,13 +99,13 @@ export function ActiveFilters({
               className="h-7 gap-1 text-xs"
               onClick={() => onRemoveBrand(brandId, false)}
             >
-              Brand: {brand?.name}
+              {brandName}
               <X className="h-3 w-3" />
             </Button>
           );
         })}
 
-        {(priceRange[0] > 0 || priceRange[1] < 200) && (
+        {(priceRange[0] > 0 || priceRange[1] < 1000) && (
           <Button
             variant="secondary"
             size="sm"
