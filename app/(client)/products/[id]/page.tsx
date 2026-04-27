@@ -14,11 +14,12 @@ import { toast } from '@/components/ui/use-toast';
 import { WishlistButton } from '@/components/wishlist-button';
 import { useCart } from '@/context/cart-context';
 import { useRecentlyViewed } from '@/context/recently-viewed-context';
-import { GroupedVariant, Product, Review } from '@/types';
+import { GroupedVariant, Product, ProductVariant, Review } from '@/types';
 import { Minus, Plus, ShoppingCart, Star } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { cn } from '@/lib/utils';
 
 // Mock reviews data (you can replace this with an API later)
 const mockReviews: Review[] = [
@@ -141,6 +142,15 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         const data = await response.json();
         setProduct(data.product);
 
+        // Auto-select first in-stock variant; fall back to first variant
+        const variants: ProductVariant[] = data.product.variants ?? [];
+        if (variants.length > 0) {
+          const first =
+            variants.find((v) => (v.stock ?? data.product.stock) > 0) ??
+            variants[0];
+          setSelectedOptions({ ...first.attributes });
+        }
+
         // Add to recently viewed
         addToRecentlyViewed({
           id: data.product._id,
@@ -195,24 +205,20 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     );
   };
 
-  // Handle variant selection with deselect functionality
-  const handleVariantSelect = (variantName: string, option: string) => {
-    // If the clicked option is already selected, deselect it
-    if (selectedOptions[variantName] === option) {
-      const newSelectedOptions = { ...selectedOptions };
-      delete newSelectedOptions[variantName];
-      setSelectedOptions(newSelectedOptions);
-      return;
-    }
+  // Check if a variant option leads to out-of-stock given current selections
+  const isOptionOutOfStock = (variantName: string, option: string): boolean => {
+    if (!product?.variants?.length) return false;
+    const testOptions = { ...selectedOptions, [variantName]: option };
+    const match = product.variants.find((v) =>
+      Object.entries(testOptions).every(([k, val]) => v.attributes[k] === val)
+    );
+    if (!match) return false;
+    return (match.stock ?? product.stock) === 0;
+  };
 
-    // Only update if the option is valid (exists in product variants)
-    if (isVariantOptionValid(variantName, option)) {
-      setSelectedOptions({
-        ...selectedOptions,
-        [variantName]: option
-      });
-    }
-    // If option is invalid, do nothing (don't clear selections)
+  const handleVariantSelect = (variantName: string, option: string) => {
+    if (!isVariantOptionValid(variantName, option)) return;
+    setSelectedOptions((prev) => ({ ...prev, [variantName]: option }));
   };
 
   // Check if all required variants are selected
@@ -515,23 +521,34 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                       variant.name,
                       option
                     );
+                    const isOos = isOptionOutOfStock(variant.name, option);
 
                     return (
                       <Button
                         key={optionIndex}
                         variant={isSelected ? 'default' : 'outline'}
-                        className="h-8 px-3 text-sm"
+                        className={cn(
+                          'h-8 px-3 text-sm',
+                          isOos && !isSelected && 'line-through opacity-50'
+                        )}
                         onClick={() =>
                           handleVariantSelect(variant.name, option)
                         }
-                        disabled={!isValidOption}
+                        disabled={!isValidOption || (!isSelected && isOos)}
                         title={
                           !isValidOption
                             ? 'This combination is not available'
+                            : isOos
+                            ? 'Out of stock'
                             : ''
                         }
                       >
                         {option}
+                        {isOos && isSelected && (
+                          <span className="ml-1.5 text-xs opacity-70">
+                            (Out of stock)
+                          </span>
+                        )}
                       </Button>
                     );
                   })}

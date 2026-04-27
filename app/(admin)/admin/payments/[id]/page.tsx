@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -10,27 +10,27 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
+import { Container } from '@/components/ui/container';
 import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import {
+  AlertCircle,
   ArrowLeft,
   Calendar,
+  CheckCircle,
+  Clock,
   CreditCard,
   Download,
   ExternalLink,
-  User,
   Receipt,
   RefreshCw,
-  AlertCircle,
-  CheckCircle,
-  Clock,
+  User,
   XCircle
 } from 'lucide-react';
 import Link from 'next/link';
-import { Container } from '@/components/ui/container';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 // Mock payment data (same as in the list page)
 const payments = {

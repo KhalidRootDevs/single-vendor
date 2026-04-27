@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Upload product images to Cloudinary
+    // Upload product images to Cloudinary (order preserved — user may have reordered via DnD)
     const imageUrls: string[] = [];
     for (const imageFile of imageFiles) {
       try {
@@ -134,6 +134,22 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+    }
+
+    // Resolve variant image references (__img:N__ → imageUrls[N])
+    // The client encodes gallery image selections as __img:N__ to avoid
+    // passing blob URLs across the network.
+    if (variants.length > 0) {
+      variants = variants.map((v) => {
+        if (typeof v.image === 'string') {
+          const match = v.image.match(/^__img:(\d+)__$/);
+          if (match) {
+            const idx = parseInt(match[1], 10);
+            v.image = imageUrls[idx] ?? undefined;
+          }
+        }
+        return v;
+      });
     }
 
     // Create the product document

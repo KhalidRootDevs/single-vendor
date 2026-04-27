@@ -257,6 +257,7 @@ export interface ProductCardData {
   createdAt: string;
   description: string;
   stock: number;
+  variants?: ProductVariant[];
 }
 
 export interface ProductCardProps {

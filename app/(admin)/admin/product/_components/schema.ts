@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-// Variant schema
 const variantSchema = z.object({
   sku: z.string().optional(),
   attributes: z.record(z.string(), z.string()),
@@ -10,10 +9,10 @@ const variantSchema = z.object({
     .min(0, 'Stock must be non-negative')
     .default(0)
     .optional(),
-  image: z.coerce.string().url('Must be a valid URL').optional()
+  // Accepts blob preview URLs (selected from gallery) or empty — resolved to CDN URLs on server
+  image: z.string().optional()
 });
 
-// SEO schema
 const seoSchema = z.object({
   title: z.string().max(60, 'SEO title cannot exceed 60 characters').optional(),
   description: z
@@ -26,9 +25,8 @@ const seoSchema = z.object({
     .optional()
 });
 
-// Main product schema
 export const productSchema = z.object({
-  // Basic Information
+  // Basic
   name: z
     .string()
     .min(2, 'Product name must be at least 2 characters')
@@ -67,7 +65,7 @@ export const productSchema = z.object({
   // SEO
   seo: seoSchema.default({}),
 
-  // Images
+  // Images — File[] with preview blob URLs assigned client-side
   images: z
     .array(z.instanceof(File))
     .min(1, 'At least one product image is required')
@@ -75,7 +73,6 @@ export const productSchema = z.object({
 
 export type ProductFormValues = z.infer<typeof productSchema>;
 
-// Step-specific schemas
 export const basicInfoSchema = productSchema.pick({
   name: true,
   description: true,
@@ -104,14 +101,6 @@ export const statusSchema = productSchema.pick({
   featured: true
 });
 
-export const variantsSchema = productSchema.pick({
-  variants: true
-});
-
-export const seoSchema_only = productSchema.pick({
-  seo: true
-});
-
-export const imagesSchema = productSchema.pick({
-  images: true
-});
+export const variantsSchema = productSchema.pick({ variants: true });
+export const seoSchema_only = productSchema.pick({ seo: true });
+export const imagesSchema = productSchema.pick({ images: true });

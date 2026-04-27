@@ -57,24 +57,24 @@ const normalizeCustomer = (customer: any): Customer => {
     };
   }
 
-  // If customer is populated from MongoDB with _id
-  if (customer._id) {
-    return {
-      id: customer._id.toString(),
-      _id: customer._id.toString(),
-      name: customer.name || 'Unknown Customer',
-      email: customer.email || 'unknown@example.com',
-      phone: customer.phone || 'N/A',
-      address: customer.address || 'N/A'
-    };
+  // customer.id holds the User ObjectId ref (may be populated or raw)
+  // customer._id is the embedded subdocument's own auto-generated ID — do NOT use it
+  let userId: string = 'unknown';
+  if (customer.id) {
+    if (typeof customer.id === 'object' && customer.id._id) {
+      // Populated: customer.id is the full User document
+      userId = customer.id._id.toString();
+    } else {
+      // Raw ObjectId or string
+      userId = customer.id.toString();
+    }
   }
 
-  // If customer already has id field
   return {
-    id: customer.id || 'unknown',
-    name: customer.name || 'Unknown Customer',
-    email: customer.email || 'unknown@example.com',
-    phone: customer.phone || 'N/A',
+    id: userId,
+    name: customer.name || customer.id?.name || 'Unknown Customer',
+    email: customer.email || customer.id?.email || 'unknown@example.com',
+    phone: customer.phone || customer.id?.phone || 'N/A',
     address: customer.address || 'N/A'
   };
 };
