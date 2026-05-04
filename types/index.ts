@@ -363,3 +363,37 @@ export interface CartItem {
   variantSku?: string;
   maxStock?: number;
 }
+
+// ============================================================================
+// PAYMENT TYPES
+// ============================================================================
+
+export interface PaymentTransaction {
+  _id: string;
+  orderNumber: string;
+  createdAt: string;
+  total: number;
+  subtotal: number;
+  tax: number;
+  shipping: number;
+  discount?: number;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  cardDetails?: CardDetails;
+  status: OrderStatus;
+}
+
+export interface PaymentStats {
+  totalSpent: number;
+  totalTransactions: number;
+  paidCount: number;
+  pendingCount: number;
+  refundedCount: number;
+  failedCount: number;
+}
+
+export interface PaymentsApiResponse {
+  payments: PaymentTransaction[];
+  stats: PaymentStats;
+  pagination: PaginationInfo;
+}

@@ -10,7 +10,8 @@ import {
   Heart,
   ArrowRight,
   Truck,
-  Clock
+  Clock,
+  Loader2
 } from 'lucide-react';
 import {
   Sheet,
@@ -27,34 +28,31 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 
-// Mock recommended products
-const recommendedProducts = [
-  {
-    id: 'mock-101',
-    name: 'Wireless Earbuds',
-    price: 49.99,
-    image: '/placeholder.svg?height=80&width=80'
-  },
-  {
-    id: 'mock-102',
-    name: 'Phone Case',
-    price: 19.99,
-    image: '/placeholder.svg?height=80&width=80'
-  },
-  {
-    id: 'mock-103',
-    name: 'Charging Cable',
-    price: 12.99,
-    image: '/placeholder.svg?height=80&width=80'
-  }
-];
+// ─── types ───────────────────────────────────────────────────────────────────
+
+interface CartRecommendation {
+  _id: string;
+  name: string;
+  price: number;
+  images: string[];
+}
+
+interface PromoResult {
+  code: string;
+  discountPercent: number;
+}
+
+// ─── constants ───────────────────────────────────────────────────────────────
+
+const FREE_SHIPPING_THRESHOLD = 50;
+
+// ─── component ───────────────────────────────────────────────────────────────
 
 export function CartButton() {
-  // All hooks must be called at the top level, before any conditional logic
   const {
     items,
     updateQuantity,
@@ -66,79 +64,141 @@ export function CartButton() {
     total,
     addItem
   } = useCart();
+
   const [isOpen, setIsOpen] = useState(false);
   const [savedItems, setSavedItems] = useState<typeof items>([]);
   const [promoCode, setPromoCode] = useState('');
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
-  const [promoApplied, setPromoApplied] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<PromoResult | null>(null);
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
-  const [addingItemId, setAddingItemId] = useState<number | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Calculate free shipping threshold
-  const FREE_SHIPPING_THRESHOLD = 50;
+  const [recommendations, setRecommendations] = useState<CartRecommendation[]>(
+    []
+  );
+  const [recsLoading, setRecsLoading] = useState(false);
+  const recsAbortRef = useRef<AbortController | null>(null);
+
   const amountToFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
   const freeShippingProgress = Math.min(
     100,
     (subtotal / FREE_SHIPPING_THRESHOLD) * 100
   );
 
-  // Ensure component is mounted before accessing browser APIs
+  const discountAmount = appliedPromo
+    ? subtotal * (appliedPromo.discountPercent / 100)
+    : 0;
+  const finalTotal = total - discountAmount;
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Handle promo code application
-  const handleApplyPromo = useCallback(() => {
-    if (!promoCode) return;
+  // Fetch recommendations when drawer opens with items in cart
+  useEffect(() => {
+    if (!isOpen || items.length === 0) return;
+
+    recsAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    recsAbortRef.current = ctrl;
+
+    setRecsLoading(true);
+
+    const cartProductIds = new Set(items.map((i) => i.productId));
+
+    fetch('/api/products?featured=true&limit=10&active=true', {
+      signal: ctrl.signal
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        const all: CartRecommendation[] = (data.products ?? []).filter(
+          (p: CartRecommendation) => !cartProductIds.has(p._id)
+        );
+        setRecommendations(all.slice(0, 3));
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          setRecommendations([]);
+        }
+      })
+      .finally(() => {
+        setRecsLoading(false);
+      });
+
+    return () => ctrl.abort();
+  }, [isOpen, items]);
+
+  const handleApplyPromo = useCallback(async () => {
+    const code = promoCode.trim();
+    if (!code) return;
 
     setIsApplyingPromo(true);
+    try {
+      const res = await fetch('/api/promo/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, subtotal })
+      });
+      const data = await res.json();
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsApplyingPromo(false);
-      setPromoApplied(true);
+      if (!res.ok) {
+        toast({
+          title: 'Promo code invalid',
+          description: data.error ?? 'Could not apply promo code.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      setAppliedPromo({
+        code: data.code,
+        discountPercent: data.discountPercent
+      });
       toast({
         title: 'Promo code applied',
-        description: `Discount code "${promoCode}" has been applied to your order.`
+        description: `${data.discountPercent}% discount applied to your order.`
       });
-    }, 1000);
-  }, [promoCode]);
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to validate promo code. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsApplyingPromo(false);
+    }
+  }, [promoCode, subtotal]);
 
-  // Handle save for later
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoCode('');
+  };
+
   const handleSaveForLater = useCallback(
     (item: (typeof items)[0]) => {
       removeItem(item.id);
       setSavedItems((prev) => [...prev, item]);
-
       toast({
-        title: 'Item saved for later',
-        description: `${item.name} has been moved to your saved items.`
+        title: 'Saved for later',
+        description: `${item.name} moved to saved items.`
       });
     },
     [removeItem]
   );
 
-  // Handle move to cart
   const handleMoveToCart = useCallback(
     (item: (typeof items)[0], index: number) => {
-      const newSavedItems = [...savedItems];
-      newSavedItems.splice(index, 1);
-      setSavedItems(newSavedItems);
-
-      // Add back to cart (id is auto-assigned by addItem)
-      const { id: _id, ...itemWithoutId } = item;
-      addItem(itemWithoutId);
-
+      setSavedItems((prev) => prev.filter((_, i) => i !== index));
+      const { id: _id, ...rest } = item;
+      addItem(rest);
       toast({
-        title: 'Item moved to cart',
-        description: `${item.name} has been moved to your cart.`
+        title: 'Moved to cart',
+        description: `${item.name} moved back to cart.`
       });
     },
-    [addItem, savedItems, setSavedItems]
+    [addItem]
   );
 
-  // Animation for removing items
   const handleRemoveWithAnimation = useCallback(
     (id: number) => {
       setRemovingItemId(id);
@@ -150,25 +210,32 @@ export function CartButton() {
     [removeItem]
   );
 
-  // Estimated delivery date (3-5 business days from now)
   const getEstimatedDelivery = useCallback(() => {
     const today = new Date();
-    const deliveryMin = new Date(today);
-    deliveryMin.setDate(today.getDate() + 3);
-    const deliveryMax = new Date(today);
-    deliveryMax.setDate(today.getDate() + 5);
-
-    const formatDate = (date: Date) => {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric'
-      });
-    };
-
-    return `${formatDate(deliveryMin)} - ${formatDate(deliveryMax)}`;
+    const min = new Date(today);
+    min.setDate(today.getDate() + 3);
+    const max = new Date(today);
+    max.setDate(today.getDate() + 5);
+    const fmt = (d: Date) =>
+      d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${fmt(min)} – ${fmt(max)}`;
   }, []);
 
-  // Use conditional rendering instead of early return
+  const handleAddRecommendation = (product: CartRecommendation) => {
+    addItem({
+      productId: product._id,
+      name: product.name,
+      price: product.price,
+      quantity: 1,
+      image: product.images[0] ?? '/placeholder.svg',
+      variant: 'Default'
+    });
+    toast({
+      title: 'Added to cart',
+      description: `${product.name} has been added.`
+    });
+  };
+
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
@@ -176,9 +243,9 @@ export function CartButton() {
           variant="outline"
           size="icon"
           className="relative transition-colors hover:bg-primary/10"
-          onClick={() => setIsOpen(true)}
+          aria-label="Open cart"
         >
-          <ShoppingCart className="h-5 w-5" />
+          <ShoppingCart className="h-5 w-5" aria-hidden />
           {isMounted && itemCount > 0 && (
             <Badge className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
               {itemCount}
@@ -187,10 +254,11 @@ export function CartButton() {
           <span className="sr-only">Open cart</span>
         </Button>
       </SheetTrigger>
+
       <SheetContent className="flex w-full flex-col overflow-hidden p-0 sm:max-w-md">
         <SheetHeader className="border-b px-6 py-4">
           <SheetTitle className="flex items-center text-xl">
-            <ShoppingCart className="mr-2 h-5 w-5" />
+            <ShoppingCart className="mr-2 h-5 w-5" aria-hidden />
             Your Cart ({isMounted ? itemCount : 0})
           </SheetTitle>
         </SheetHeader>
@@ -202,8 +270,8 @@ export function CartButton() {
             </div>
             <h3 className="mb-2 text-xl font-medium">Your cart is empty</h3>
             <p className="mb-6 max-w-xs text-center text-sm text-muted-foreground">
-              Looks like you haven't added anything to your cart yet. Start
-              shopping to fill it with great items!
+              Looks like you haven't added anything yet. Start shopping to fill
+              it with great items!
             </p>
             <Link href="/products" onClick={() => setIsOpen(false)}>
               <Button className="rounded-full px-8">Browse Products</Button>
@@ -215,27 +283,34 @@ export function CartButton() {
             {amountToFreeShipping > 0 && (
               <div className="bg-muted/30 px-6 py-3">
                 <div className="mb-2 flex items-center">
-                  <Truck className="mr-2 h-4 w-4 text-primary" />
+                  <Truck className="mr-2 h-4 w-4 text-primary" aria-hidden />
                   <p className="text-sm font-medium">
                     Add ${amountToFreeShipping.toFixed(2)} more for free
                     shipping
                   </p>
                 </div>
-                <Progress value={freeShippingProgress} className="h-1.5" />
+                <Progress
+                  value={freeShippingProgress}
+                  className="h-1.5"
+                  aria-label={`${Math.round(
+                    freeShippingProgress
+                  )}% toward free shipping`}
+                />
               </div>
             )}
 
-            {/* Cart items */}
             <ScrollArea className="flex-1 px-6">
               <div className="space-y-5 py-4">
+                {/* Cart items */}
                 {items.map((item) => (
-                  <div
+                  <article
                     key={item.id}
                     className={cn(
                       'flex gap-4 rounded-lg bg-background p-3 transition-all duration-300 hover:bg-muted/50',
                       removingItemId === item.id &&
                         'translate-x-full transform opacity-0'
                     )}
+                    aria-label={item.name}
                   >
                     <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-md bg-muted">
                       <Image
@@ -243,6 +318,7 @@ export function CartButton() {
                         alt={item.name}
                         fill
                         className="object-cover"
+                        sizes="80px"
                       />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -251,9 +327,11 @@ export function CartButton() {
                           <h3 className="line-clamp-1 font-medium">
                             {item.name}
                           </h3>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {item.variant}
-                          </p>
+                          {item.variant && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {item.variant}
+                            </p>
+                          )}
                         </div>
                         <p className="font-medium">
                           ${(item.price * item.quantity).toFixed(2)}
@@ -261,7 +339,11 @@ export function CartButton() {
                       </div>
 
                       <div className="mt-3 flex items-center justify-between">
-                        <div className="flex items-center rounded-full border">
+                        <div
+                          className="flex items-center rounded-full border"
+                          role="group"
+                          aria-label={`Quantity for ${item.name}`}
+                        >
                           <Button
                             variant="ghost"
                             size="icon"
@@ -270,25 +352,30 @@ export function CartButton() {
                               updateQuantity(item.id, item.quantity - 1)
                             }
                             disabled={item.quantity <= 1}
+                            aria-label="Decrease quantity"
                           >
-                            <Minus className="h-3 w-3" />
-                            <span className="sr-only">Decrease quantity</span>
+                            <Minus className="h-3 w-3" aria-hidden />
                           </Button>
-                          <span className="w-8 text-center text-sm">
+                          <span
+                            className="w-8 text-center text-sm"
+                            aria-live="polite"
+                          >
                             {item.quantity}
                           </span>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 rounded-full"
-                            onClick={() => {
-                              setAddingItemId(item.id);
-                              updateQuantity(item.id, item.quantity + 1);
-                              setTimeout(() => setAddingItemId(null), 300);
-                            }}
+                            onClick={() =>
+                              updateQuantity(item.id, item.quantity + 1)
+                            }
+                            disabled={
+                              item.maxStock !== undefined &&
+                              item.quantity >= item.maxStock
+                            }
+                            aria-label="Increase quantity"
                           >
-                            <Plus className="h-3 w-3" />
-                            <span className="sr-only">Increase quantity</span>
+                            <Plus className="h-3 w-3" aria-hidden />
                           </Button>
                         </div>
 
@@ -298,25 +385,26 @@ export function CartButton() {
                             size="icon"
                             className="h-7 w-7 rounded-full hover:bg-muted"
                             onClick={() => handleSaveForLater(item)}
+                            aria-label={`Save ${item.name} for later`}
                           >
-                            <Heart className="h-3.5 w-3.5" />
-                            <span className="sr-only">Save for later</span>
+                            <Heart className="h-3.5 w-3.5" aria-hidden />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 rounded-full hover:bg-muted"
                             onClick={() => handleRemoveWithAnimation(item.id)}
+                            aria-label={`Remove ${item.name}`}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span className="sr-only">Remove item</span>
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden />
                           </Button>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </article>
                 ))}
               </div>
+
               {/* Saved for later */}
               {savedItems.length > 0 && (
                 <div className="mt-4 border-t pt-4">
@@ -332,6 +420,7 @@ export function CartButton() {
                             alt={item.name}
                             fill
                             className="object-cover"
+                            sizes="64px"
                           />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -354,133 +443,148 @@ export function CartButton() {
                   </div>
                 </div>
               )}
-              {/* Recommended products */}
+
+              {/* You Might Also Like */}
               {items.length > 0 && (
                 <div className="mt-6 border-t pt-6">
                   <h3 className="mb-3 font-medium">You Might Also Like</h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {recommendedProducts.map((product) => (
-                      <div key={product.id} className="text-center">
-                        <div className="relative mx-auto mb-2 h-20 w-20 overflow-hidden rounded-md bg-muted">
-                          <Image
-                            src={product.image || '/placeholder.svg'}
-                            alt={product.name}
-                            fill
-                            className="object-cover"
-                          />
+
+                  {recsLoading ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} className="text-center">
+                          <div className="mx-auto mb-2 h-20 w-20 animate-pulse rounded-md bg-muted" />
+                          <div className="mx-auto mb-1 h-3 w-14 animate-pulse rounded bg-muted" />
+                          <div className="mx-auto h-3 w-10 animate-pulse rounded bg-muted" />
                         </div>
-                        <h4 className="line-clamp-1 text-xs font-medium">
-                          {product.name}
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                          ${product.price.toFixed(2)}
-                        </p>
-                        <Button
-                          variant="link"
-                          className="h-auto p-0 text-xs"
-                          onClick={() => {
-                            addItem({
-                              productId: product.id,
-                              name: product.name,
-                              price: product.price,
-                              quantity: 1,
-                              image: product.image,
-                              variant: 'Default'
-                            });
-                            toast({
-                              title: 'Item added to cart',
-                              description: `${product.name} has been added to your cart.`
-                            });
-                          }}
-                        >
-                          Add to Cart
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  ) : recommendations.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      {recommendations.map((product) => (
+                        <div key={product._id} className="text-center">
+                          <div className="relative mx-auto mb-2 h-20 w-20 overflow-hidden rounded-md bg-muted">
+                            <Image
+                              src={product.images[0] ?? '/placeholder.svg'}
+                              alt={product.name}
+                              fill
+                              className="object-cover"
+                              sizes="80px"
+                            />
+                          </div>
+                          <h4 className="line-clamp-2 text-xs font-medium leading-tight">
+                            {product.name}
+                          </h4>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            ${product.price.toFixed(2)}
+                          </p>
+                          <Button
+                            variant="link"
+                            className="h-auto p-0 text-xs"
+                            onClick={() => handleAddRecommendation(product)}
+                          >
+                            Add to Cart
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               )}
-              <div className="h-4"></div> {/* Bottom spacing */}
+
+              <div className="h-4" aria-hidden />
             </ScrollArea>
 
             {items.length > 0 && (
               <>
                 {/* Promo code */}
                 <div className="border-t px-6 py-3">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Promo code"
-                      value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value)}
-                      className="rounded-full"
-                      disabled={promoApplied}
-                    />
-                    <Button
-                      variant={promoApplied ? 'outline' : 'default'}
-                      onClick={handleApplyPromo}
-                      disabled={isApplyingPromo || promoApplied || !promoCode}
-                      className="rounded-full"
-                    >
-                      {isApplyingPromo ? (
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      ) : promoApplied ? (
-                        'Applied'
-                      ) : (
-                        'Apply'
-                      )}
-                    </Button>
-                  </div>
-                  {promoApplied && (
-                    <div className="mt-2 flex items-center text-sm text-green-600">
-                      <Badge
-                        variant="outline"
-                        className="mr-2 border-green-200 bg-green-50 text-green-600"
+                  {appliedPromo ? (
+                    <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                      <div className="flex items-center gap-2 text-sm text-green-700">
+                        <Badge
+                          variant="outline"
+                          className="border-green-300 bg-green-100 text-green-700"
+                        >
+                          {appliedPromo.code}
+                        </Badge>
+                        <span>{appliedPromo.discountPercent}% off applied</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto p-0 text-xs text-green-700 hover:text-green-900"
+                        onClick={handleRemovePromo}
+                        aria-label="Remove promo code"
                       >
-                        {promoCode}
-                      </Badge>
-                      <span>10% discount applied</span>
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Promo code"
+                        value={promoCode}
+                        onChange={(e) =>
+                          setPromoCode(e.target.value.toUpperCase())
+                        }
+                        onKeyDown={(e) =>
+                          e.key === 'Enter' && handleApplyPromo()
+                        }
+                        className="rounded-full"
+                        disabled={isApplyingPromo}
+                        aria-label="Enter promo code"
+                      />
+                      <Button
+                        onClick={handleApplyPromo}
+                        disabled={isApplyingPromo || !promoCode.trim()}
+                        className="rounded-full"
+                      >
+                        {isApplyingPromo ? (
+                          <Loader2
+                            className="h-4 w-4 animate-spin"
+                            aria-hidden
+                          />
+                        ) : (
+                          'Apply'
+                        )}
+                      </Button>
                     </div>
                   )}
                 </div>
 
                 {/* Order summary */}
                 <div className="border-t bg-muted/30 px-6 py-4">
-                  <div className="space-y-1.5">
+                  <dl className="space-y-1.5">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Subtotal</span>
-                      <span>${subtotal.toFixed(2)}</span>
+                      <dt className="text-muted-foreground">Subtotal</dt>
+                      <dd>${subtotal.toFixed(2)}</dd>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Shipping</span>
-                      <span>
+                      <dt className="text-muted-foreground">Shipping</dt>
+                      <dd>
                         {shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}
-                      </span>
+                      </dd>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Tax</span>
-                      <span>${tax.toFixed(2)}</span>
+                      <dt className="text-muted-foreground">Tax</dt>
+                      <dd>${tax.toFixed(2)}</dd>
                     </div>
-                    {promoApplied && (
+                    {appliedPromo && (
                       <div className="flex justify-between text-sm text-green-600">
-                        <span>Discount (10%)</span>
-                        <span>-${(subtotal * 0.1).toFixed(2)}</span>
+                        <dt>Discount ({appliedPromo.discountPercent}%)</dt>
+                        <dd>-${discountAmount.toFixed(2)}</dd>
                       </div>
                     )}
                     <Separator className="my-2" />
                     <div className="flex justify-between font-medium">
-                      <span>Total</span>
-                      <span>
-                        $
-                        {promoApplied
-                          ? (total * 0.9).toFixed(2)
-                          : total.toFixed(2)}
-                      </span>
+                      <dt>Total</dt>
+                      <dd>${finalTotal.toFixed(2)}</dd>
                     </div>
-                  </div>
+                  </dl>
 
-                  {/* Estimated delivery */}
                   <div className="mt-3 flex items-center text-sm text-muted-foreground">
-                    <Clock className="mr-1.5 h-3.5 w-3.5" />
+                    <Clock className="mr-1.5 h-3.5 w-3.5" aria-hidden />
                     <span>Estimated delivery: {getEstimatedDelivery()}</span>
                   </div>
                 </div>
@@ -504,7 +608,7 @@ export function CartButton() {
                     >
                       <Button className="w-full rounded-full">
                         Checkout
-                        <ArrowRight className="ml-2 h-4 w-4" />
+                        <ArrowRight className="ml-2 h-4 w-4" aria-hidden />
                       </Button>
                     </Link>
                   </div>

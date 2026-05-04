@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -10,31 +11,170 @@ import {
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Bell, Mail, ShoppingBag, Heart, AlertCircle } from 'lucide-react';
-import { useState } from 'react';
+import { Bell, Mail, ShoppingBag, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
+// ─── types ───────────────────────────────────────────────────────────────────
+
+interface Preferences {
+  newsletter: boolean;
+  marketing: boolean;
+  notifications: boolean;
+}
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+const DEFAULT_PREFS: Preferences = {
+  newsletter: true,
+  marketing: false,
+  notifications: true
+};
+
+function PreferenceRow({
+  id,
+  icon: Icon,
+  label,
+  description,
+  checked,
+  disabled,
+  onChange
+}: {
+  id: string;
+  icon: React.ElementType;
+  label: string;
+  description: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex items-start gap-3">
+        <Icon
+          className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+        <div>
+          <Label htmlFor={id} className="cursor-pointer font-medium">
+            {label}
+          </Label>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      <Switch
+        id={id}
+        checked={checked}
+        onCheckedChange={onChange}
+        disabled={disabled}
+        aria-label={label}
+      />
+    </div>
+  );
+}
+
+// ─── page ────────────────────────────────────────────────────────────────────
+
 export default function SettingsPage() {
-  const [settings, setSettings] = useState({
-    newsletter: true,
-    promotionalEmails: true,
-    orderUpdates: true,
-    newArrivals: false,
-    priceDrops: true,
-    wishlistUpdates: false,
-    smsNotifications: false
-  });
+  const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
+  const [saved, setSaved] = useState<Preferences>(DEFAULT_PREFS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
 
-  const handleToggle = (key: keyof typeof settings) => {
-    setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
+  const isDirty =
+    prefs.newsletter !== saved.newsletter ||
+    prefs.marketing !== saved.marketing ||
+    prefs.notifications !== saved.notifications;
+
+  const fetchPreferences = useCallback(async () => {
+    setLoading(true);
+    setFetchError(false);
+    try {
+      const res = await fetch('/api/user/preferences', {
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to load preferences');
+      const loaded: Preferences = {
+        newsletter: data.preferences.newsletter ?? true,
+        marketing: data.preferences.marketing ?? false,
+        notifications: data.preferences.notifications ?? true
+      };
+      setPrefs(loaded);
+      setSaved(loaded);
+    } catch {
+      setFetchError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPreferences();
+  }, [fetchPreferences]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/user/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(prefs)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to save preferences');
+
+      const updated: Preferences = {
+        newsletter: data.preferences.newsletter,
+        marketing: data.preferences.marketing,
+        notifications: data.preferences.notifications
+      };
+      setPrefs(updated);
+      setSaved(updated);
+
+      toast({
+        title: 'Preferences saved',
+        description: 'Your notification settings have been updated.'
+      });
+    } catch (err: unknown) {
+      toast({
+        title: 'Error',
+        description:
+          err instanceof Error ? err.message : 'Failed to save preferences.',
+        variant: 'destructive'
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleSave = () => {
-    toast({
-      title: 'Settings saved',
-      description: 'Your preferences have been updated successfully.'
-    });
-  };
+  const handleDiscard = () => setPrefs({ ...saved });
+
+  const set = (field: keyof Preferences) => (value: boolean) =>
+    setPrefs((prev) => ({ ...prev, [field]: value }));
+
+  const controlsDisabled = loading || saving;
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[300px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex min-h-[300px] flex-col items-center justify-center gap-4">
+        <AlertCircle className="h-10 w-10 text-destructive" />
+        <p className="text-muted-foreground">Failed to load preferences.</p>
+        <Button variant="outline" onClick={fetchPreferences}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -42,169 +182,71 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>Email Preferences</CardTitle>
           <CardDescription>
-            Manage your email notification preferences
+            Manage how we communicate with you via email
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-start gap-3">
-              <Mail className="mt-0.5 h-5 w-5 text-muted-foreground" />
-              <div>
-                <Label htmlFor="newsletter" className="cursor-pointer">
-                  Newsletter
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Receive our weekly newsletter with updates and tips
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="newsletter"
-              checked={settings.newsletter}
-              onCheckedChange={() => handleToggle('newsletter')}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-start gap-3">
-              <ShoppingBag className="mt-0.5 h-5 w-5 text-muted-foreground" />
-              <div>
-                <Label htmlFor="promotional" className="cursor-pointer">
-                  Promotional Emails
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Get notified about sales, offers, and promotions
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="promotional"
-              checked={settings.promotionalEmails}
-              onCheckedChange={() => handleToggle('promotionalEmails')}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-start gap-3">
-              <Bell className="mt-0.5 h-5 w-5 text-muted-foreground" />
-              <div>
-                <Label htmlFor="orderUpdates" className="cursor-pointer">
-                  Order Updates
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Receive updates about your order status and shipping
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="orderUpdates"
-              checked={settings.orderUpdates}
-              onCheckedChange={() => handleToggle('orderUpdates')}
-            />
-          </div>
+          <PreferenceRow
+            id="newsletter"
+            icon={Mail}
+            label="Newsletter"
+            description="Weekly updates, curated picks, and store news"
+            checked={prefs.newsletter}
+            disabled={controlsDisabled}
+            onChange={set('newsletter')}
+          />
+          <PreferenceRow
+            id="marketing"
+            icon={ShoppingBag}
+            label="Promotions & Offers"
+            description="Sales, discount codes, new arrivals, and price drop alerts"
+            checked={prefs.marketing}
+            disabled={controlsDisabled}
+            onChange={set('marketing')}
+          />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Product Notifications</CardTitle>
+          <CardTitle>Order & Account Notifications</CardTitle>
           <CardDescription>
-            Stay updated about products you care about
+            Transactional updates about your orders and account activity
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-start gap-3">
-              <ShoppingBag className="mt-0.5 h-5 w-5 text-muted-foreground" />
-              <div>
-                <Label htmlFor="newArrivals" className="cursor-pointer">
-                  New Arrivals
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Be the first to know about new products
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="newArrivals"
-              checked={settings.newArrivals}
-              onCheckedChange={() => handleToggle('newArrivals')}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 text-muted-foreground" />
-              <div>
-                <Label htmlFor="priceDrops" className="cursor-pointer">
-                  Price Drops
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Get alerts when prices drop on products you viewed
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="priceDrops"
-              checked={settings.priceDrops}
-              onCheckedChange={() => handleToggle('priceDrops')}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-start gap-3">
-              <Heart className="mt-0.5 h-5 w-5 text-muted-foreground" />
-              <div>
-                <Label htmlFor="wishlistUpdates" className="cursor-pointer">
-                  Wishlist Updates
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Notifications about items in your wishlist (stock, price
-                  changes)
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="wishlistUpdates"
-              checked={settings.wishlistUpdates}
-              onCheckedChange={() => handleToggle('wishlistUpdates')}
-            />
-          </div>
+        <CardContent>
+          <PreferenceRow
+            id="notifications"
+            icon={Bell}
+            label="Order & Delivery Updates"
+            description="Shipping confirmations, delivery status, and order changes"
+            checked={prefs.notifications}
+            disabled={controlsDisabled}
+            onChange={set('notifications')}
+          />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>SMS Notifications</CardTitle>
-          <CardDescription>
-            Receive text messages for important updates
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-start gap-3">
-              <Bell className="mt-0.5 h-5 w-5 text-muted-foreground" />
-              <div>
-                <Label htmlFor="smsNotifications" className="cursor-pointer">
-                  SMS Notifications
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Receive text messages for order updates and delivery
-                  notifications
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="smsNotifications"
-              checked={settings.smsNotifications}
-              onCheckedChange={() => handleToggle('smsNotifications')}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end">
-        <Button onClick={handleSave}>Save Preferences</Button>
+      <div className="flex items-center justify-end gap-3">
+        {isDirty && (
+          <Button
+            variant="outline"
+            onClick={handleDiscard}
+            disabled={controlsDisabled}
+          >
+            Discard changes
+          </Button>
+        )}
+        <Button onClick={handleSave} disabled={!isDirty || controlsDisabled}>
+          {saving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              Saving…
+            </>
+          ) : (
+            'Save Preferences'
+          )}
+        </Button>
       </div>
     </div>
   );
