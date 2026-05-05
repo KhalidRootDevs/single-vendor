@@ -337,7 +337,7 @@ export default function PaymentDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const paymentId = params.id as string;
-  const payment = payments[paymentId];
+  const payment = payments[paymentId as keyof typeof payments];
 
   const [isRefunding, setIsRefunding] = useState(false);
 

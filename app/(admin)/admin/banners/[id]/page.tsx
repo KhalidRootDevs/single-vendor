@@ -2,7 +2,6 @@
 
 import type React from 'react';
 
-import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -11,19 +10,20 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
+import { Container } from '@/components/ui/container';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
+import { BannerFormValues, bannerSchema } from '@/lib/validations/index';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Loader2, Upload } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { Container } from '@/components/ui/container';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { BannerFormValues, bannerSchema } from '@/lib/validations/index';
 
 // Mock banner data
 const bannersData = {
@@ -69,7 +69,7 @@ export default function EditBannerPage() {
   const params = useParams();
   const router = useRouter();
   const bannerId = params.id as string;
-  const banner = bannersData[bannerId];
+  const banner = bannersData[bannerId as keyof typeof bannersData];
 
   const [image, setImage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,7 +80,7 @@ export default function EditBannerPage() {
     formState: { errors },
     reset
   } = useForm<BannerFormValues>({
-    resolver: zodResolver(bannerSchema),
+    resolver: zodResolver(bannerSchema) as any,
     defaultValues: {
       title: '',
       description: '',

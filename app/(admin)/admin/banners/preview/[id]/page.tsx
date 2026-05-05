@@ -1,11 +1,11 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { Container } from '@/components/ui/container';
 import { ArrowLeft, Edit } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Container } from '@/components/ui/container';
 
 // Mock banner data
 const bannersData = {
@@ -50,7 +50,7 @@ const bannersData = {
 export default function BannerPreviewPage() {
   const params = useParams();
   const bannerId = params.id as string;
-  const banner = bannersData[bannerId];
+  const banner = bannersData[bannerId as keyof typeof bannersData];
 
   if (!banner) {
     return (

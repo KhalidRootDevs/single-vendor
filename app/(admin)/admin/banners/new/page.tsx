@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
+import { BannerFormValues, bannerSchema } from '@/lib/validations/index';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Loader2, Upload } from 'lucide-react';
 import Image from 'next/image';
@@ -23,7 +24,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { BannerFormValues, bannerSchema } from '@/lib/validations/index';
 
 export default function NewBannerPage() {
   const router = useRouter();
@@ -35,7 +35,7 @@ export default function NewBannerPage() {
     handleSubmit,
     formState: { errors }
   } = useForm<BannerFormValues>({
-    resolver: zodResolver(bannerSchema),
+    resolver: zodResolver(bannerSchema) as any,
     defaultValues: {
       title: '',
       description: '',

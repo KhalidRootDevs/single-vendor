@@ -1,5 +1,7 @@
 'use client';
 
+import { DataTable } from '@/components/tables/data-table';
+import { createOrderColumns } from '@/components/tables/order/columns';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -8,13 +10,11 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import { RefreshCw } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from '@/components/ui/use-toast';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { DataTable } from '@/components/tables/data-table';
-import { createOrderColumns, Order } from '@/components/tables/order/columns';
-import { PaginationInfo } from '@/types';
+import { Order, PaginationInfo } from '@/types';
+import { RefreshCw } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export default function OrdersPage() {
   const router = useRouter();

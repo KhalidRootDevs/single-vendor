@@ -94,9 +94,11 @@ export default function ContactSubmissionsPage() {
     // Mark as read if it's new
     if (submission.status === 'new') {
       const updatedSubmissions = submissions.map((s) =>
-        s.id === submission.id ? { ...s, status: 'read' } : s
+        s.id === submission.id
+          ? { ...s, status: 'read' as ContactSubmission['status'] }
+          : s
       );
-      setSubmissions(updatedSubmissions);
+      setSubmissions(updatedSubmissions as ContactSubmission[]);
       localStorage.setItem(
         'contactSubmissions',
         JSON.stringify(updatedSubmissions)
