@@ -14,7 +14,8 @@ import {
   Legend,
   ResponsiveContainer,
   LineChart as RechartsLineChart,
-  Line
+  Line,
+  type PieLabelRenderProps
 } from 'recharts';
 import { cn } from '@/lib/utils';
 
@@ -74,12 +75,14 @@ export function Chart({
               dataKey={options?.dataKey || 'value'}
               label={
                 options?.label !== false
-                  ? ({ name, percent }) =>
-                      `${name}: ${(percent * 100).toFixed(0)}%`
+                  ? (props: PieLabelRenderProps) =>
+                      `${String(props.name ?? '')}: ${(
+                        (props as unknown as { percent: number }).percent * 100
+                      ).toFixed(0)}%`
                   : undefined
               }
             >
-              {data.map((entry, index) => (
+              {data.map((_entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={
@@ -172,6 +175,6 @@ export const ChartLegendContent = ({
 export const ChartStyle = ({
   children,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) => {
+}: React.HTMLAttributes<HTMLStyleElement>) => {
   return <style {...props}>{children}</style>;
 };

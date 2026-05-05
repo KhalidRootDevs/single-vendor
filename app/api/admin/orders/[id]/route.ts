@@ -1,7 +1,11 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { Order } from '@/models/Order';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
+import { isMongooseValidationError } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/admin/orders/[id]
@@ -84,7 +88,7 @@ export async function PATCH(
           status: 'shipped',
           date: new Date(),
           description: `Tracking number updated: ${trackingNumber}`,
-          updatedBy: decoded.userId
+          updatedBy: new mongoose.Types.ObjectId(decoded.userId)
         });
       }
     }
@@ -100,7 +104,7 @@ export async function PATCH(
         status: timelineEvent.status,
         date: new Date(),
         description: timelineEvent.description,
-        updatedBy: decoded.userId
+        updatedBy: new mongoose.Types.ObjectId(decoded.userId)
       });
     }
 
@@ -116,11 +120,11 @@ export async function PATCH(
       message: 'Order updated successfully',
       order: updatedOrder
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update order error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
@@ -170,7 +174,7 @@ export async function POST(
       status,
       date: new Date(),
       description,
-      updatedBy: decoded.userId
+      updatedBy: new mongoose.Types.ObjectId(decoded.userId)
     });
 
     await order.save();
@@ -184,11 +188,11 @@ export async function POST(
       message: 'Timeline event added successfully',
       order: updatedOrder
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Add timeline event error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
@@ -235,7 +239,7 @@ export async function DELETE(
       status: 'cancelled',
       date: new Date(),
       description: reason || 'Order was cancelled by admin',
-      updatedBy: decoded.userId
+      updatedBy: new mongoose.Types.ObjectId(decoded.userId)
     });
 
     await order.save();
@@ -249,11 +253,11 @@ export async function DELETE(
       message: 'Order cancelled successfully',
       order: updatedOrder
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Cancel order error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 

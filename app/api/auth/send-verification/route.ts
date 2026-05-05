@@ -5,6 +5,8 @@ import { User } from '@/models/User';
 import { verifyToken } from '@/lib/auth';
 import { sendVerificationEmail } from '@/lib/email';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     await connectDB();

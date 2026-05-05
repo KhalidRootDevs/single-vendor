@@ -15,7 +15,7 @@ export interface TimelineEvent {
   status: string;
   date: string;
   description: string;
-  updatedBy?: any; // Can be string or populated object
+  updatedBy?: string | { _id: string; name: string; email: string };
 }
 
 // ============================================================================
@@ -123,7 +123,7 @@ export interface OrderItem {
     attributes: Record<string, string>;
     sku?: string;
   };
-  productId?: any; // Can be string or populated object
+  productId?: string | { _id: string; name: string };
   sku?: string;
 }
 
@@ -166,7 +166,7 @@ export interface BillingAddress {
 export interface Order {
   _id: string;
   orderNumber: string;
-  customer: Customer | any; // Can be object or populated user
+  customer: Customer;
   shippingAddress: ShippingAddress;
   billingAddress?: BillingAddress;
   items: OrderItem[];

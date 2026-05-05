@@ -3,6 +3,8 @@ import { Order } from '@/models/Order';
 import connectDB from '@/lib/database';
 import { escapeRegex } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 const ALLOWED_ORDER_SORT_FIELDS = [
   'createdAt',
   'total',
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
-    const query: any = {};
+    const query: Record<string, unknown> = {};
 
     // Status filter
     if (status && status !== 'all') {
@@ -47,16 +49,18 @@ export async function GET(request: NextRequest) {
 
     // Date range filter
     if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
+      const dateFilter: Record<string, Date> = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) dateFilter.$lte = new Date(endDate);
+      query.createdAt = dateFilter;
     }
 
     // Total amount filter
     if (minTotal || maxTotal) {
-      query.total = {};
-      if (minTotal) query.total.$gte = Number.parseFloat(minTotal);
-      if (maxTotal) query.total.$lte = Number.parseFloat(maxTotal);
+      const totalFilter: Record<string, number> = {};
+      if (minTotal) totalFilter.$gte = Number.parseFloat(minTotal);
+      if (maxTotal) totalFilter.$lte = Number.parseFloat(maxTotal);
+      query.total = totalFilter;
     }
 
     if (search) {

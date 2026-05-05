@@ -15,6 +15,12 @@ const nextConfig = {
         hostname: 'example.com'
       }
     ]
+  },
+  // Suppress fetch errors during build (ECONNREFUSED from internal API calls)
+  logging: {
+    fetches: {
+      fullUrl: false
+    }
   }
 };
 

@@ -3,6 +3,17 @@ import Stripe from 'stripe';
 import { getStripeConfigAdmin } from '@/lib/admin-settings';
 import { verifyToken } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
+function isStripeError(error: unknown): error is Stripe.errors.StripeError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'type' in error &&
+    typeof (error as { type: unknown }).type === 'string'
+  );
+}
+
 export async function POST(request: NextRequest) {
   const token = request.cookies.get('token')?.value;
   if (!token) {
@@ -50,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // Initialize Stripe with the secret key from admin settings
     const stripe = new Stripe(stripeConfig.secretKey, {
-      apiVersion: '2024-06-20'
+      apiVersion: '2025-09-30.clover'
     });
 
     // Create a PaymentIntent with the order amount and currency
@@ -70,62 +81,61 @@ export async function POST(request: NextRequest) {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Stripe API Error:', error);
 
-    // Handle specific Stripe errors
-    if (error.type === 'StripeAuthenticationError') {
-      return NextResponse.json(
-        {
-          error:
-            'Stripe authentication failed. Please check your API keys in the admin settings.',
-          code: 'STRIPE_AUTH_ERROR'
-        },
-        { status: 401 }
-      );
+    if (isStripeError(error)) {
+      if (error.type === 'StripeAuthenticationError') {
+        return NextResponse.json(
+          {
+            error:
+              'Stripe authentication failed. Please check your API keys in the admin settings.',
+            code: 'STRIPE_AUTH_ERROR'
+          },
+          { status: 401 }
+        );
+      }
+      if (error.type === 'StripeCardError') {
+        return NextResponse.json(
+          { error: 'Your card was declined.' },
+          { status: 400 }
+        );
+      }
+      if (error.type === 'StripeRateLimitError') {
+        return NextResponse.json(
+          { error: 'Too many requests made to the API too quickly' },
+          { status: 429 }
+        );
+      }
+      if (error.type === 'StripeInvalidRequestError') {
+        return NextResponse.json(
+          { error: "Invalid parameters were supplied to Stripe's API" },
+          { status: 400 }
+        );
+      }
+      if (error.type === 'StripeAPIError') {
+        return NextResponse.json(
+          { error: "An error occurred internally with Stripe's API" },
+          { status: 500 }
+        );
+      }
+      if (error.type === 'StripeConnectionError') {
+        return NextResponse.json(
+          {
+            error: 'Some kind of error occurred during the HTTPS communication'
+          },
+          { status: 500 }
+        );
+      }
     }
 
-    if (error.type === 'StripeCardError') {
-      return NextResponse.json(
-        { error: 'Your card was declined.' },
-        { status: 400 }
-      );
-    }
-
-    if (error.type === 'StripeRateLimitError') {
-      return NextResponse.json(
-        { error: 'Too many requests made to the API too quickly' },
-        { status: 429 }
-      );
-    }
-
-    if (error.type === 'StripeInvalidRequestError') {
-      return NextResponse.json(
-        { error: "Invalid parameters were supplied to Stripe's API" },
-        { status: 400 }
-      );
-    }
-
-    if (error.type === 'StripeAPIError') {
-      return NextResponse.json(
-        { error: "An error occurred internally with Stripe's API" },
-        { status: 500 }
-      );
-    }
-
-    if (error.type === 'StripeConnectionError') {
-      return NextResponse.json(
-        { error: 'Some kind of error occurred during the HTTPS communication' },
-        { status: 500 }
-      );
-    }
-
-    // Generic error handling
     return NextResponse.json(
       {
         error: 'An unexpected error occurred while processing payment',
         details:
-          process.env.NODE_ENV === 'development' ? error.message : undefined
+          process.env.NODE_ENV === 'development' && error instanceof Error
+            ? error.message
+            : undefined
       },
       { status: 500 }
     );

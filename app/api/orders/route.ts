@@ -9,6 +9,8 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { escapeRegex } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 const ALLOWED_ORDER_SORT_FIELDS = [
   'createdAt',
   'total',

@@ -704,7 +704,9 @@ export default function UserDetailsPage() {
                                   {order.orderNumber}
                                 </TableCell>
                                 <TableCell>
-                                  {new Date(order.date).toLocaleDateString()}
+                                  {new Date(
+                                    order.createdAt
+                                  ).toLocaleDateString()}
                                 </TableCell>
                                 <TableCell>
                                   {order.items.reduce(

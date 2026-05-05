@@ -4,8 +4,21 @@ let stripePromise: Promise<any> | null = null;
 let stripeConfig: { publishableKey: string | null; enabled: boolean } | null =
   null;
 
+const FALLBACK_CONFIG = { publishableKey: null, enabled: false } as const;
+
 // Fetch Stripe configuration from the server
-async function fetchStripeConfig() {
+async function fetchStripeConfig(): Promise<{
+  publishableKey: string | null;
+  enabled: boolean;
+}> {
+  // Skip fetch during build — no server running
+  if (
+    typeof window === 'undefined' &&
+    process.env.NEXT_PHASE === 'phase-production-build'
+  ) {
+    return FALLBACK_CONFIG;
+  }
+
   if (stripeConfig) {
     return stripeConfig;
   }
@@ -18,10 +31,10 @@ async function fetchStripeConfig() {
     }
     stripeConfig = await response.json();
 
-    return stripeConfig;
+    return stripeConfig ?? FALLBACK_CONFIG;
   } catch (error) {
     console.error('Error fetching Stripe config:', error);
-    return { publishableKey: null, enabled: false };
+    return FALLBACK_CONFIG;
   }
 }
 

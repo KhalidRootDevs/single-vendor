@@ -1,4 +1,3 @@
-import { SettingsFormData } from '@/app/(admin)/admin/settings/page';
 import { RichTextEditor } from '@/components/rich-text-editor';
 import {
   Card,
@@ -8,6 +7,7 @@ import {
   CardTitle
 } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { SettingsFormData } from '@/lib/validations';
 import { useFormContext } from 'react-hook-form';
 
 export default function CmsSettings() {

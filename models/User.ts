@@ -68,6 +68,7 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
+  addNote(content: string, createdBy: mongoose.Types.ObjectId): Promise<IUser>;
 }
 
 const orderReferenceSchema = new Schema<IOrderReference>({
@@ -330,10 +331,8 @@ userSchema.pre<IUser>('save', async function (next) {
 // Update updatedAt for notes when modified
 userSchema.pre('save', function (next) {
   if (this.isModified('notes')) {
-    this.notes.forEach((note) => {
-      if (note.isModified()) {
-        note.updatedAt = new Date();
-      }
+    this.notes.forEach((note: INote) => {
+      note.updatedAt = new Date();
     });
   }
   next();
@@ -402,7 +401,7 @@ userSchema.methods.addAddress = function (
   // If this is the first address or marked as default, set it as default
   if (this.addresses.length === 0 || addressData.isDefault) {
     // Remove default from other addresses
-    this.addresses.forEach((addr) => {
+    this.addresses.forEach((addr: IAddress) => {
       addr.isDefault = false;
     });
   }
@@ -419,7 +418,7 @@ userSchema.methods.addAddress = function (
 // Instance method to set default address
 userSchema.methods.setDefaultAddress = function (addressIndex: number) {
   if (addressIndex >= 0 && addressIndex < this.addresses.length) {
-    this.addresses.forEach((addr, index) => {
+    this.addresses.forEach((addr: IAddress, index: number) => {
       addr.isDefault = index === addressIndex;
     });
     return this.save();

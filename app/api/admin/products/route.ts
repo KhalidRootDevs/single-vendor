@@ -4,7 +4,13 @@ import { verifyToken } from '@/lib/auth';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import connectDB from '@/lib/database';
 import mongoose from 'mongoose';
-import { escapeRegex } from '@/lib/utils';
+import {
+  escapeRegex,
+  isMongooseValidationError,
+  isMongooseDuplicateKey
+} from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 const ALLOWED_PRODUCT_SORT_FIELDS = [
   'createdAt',
@@ -73,18 +79,25 @@ export async function POST(request: NextRequest) {
       : {};
 
     // Parse variants JSON
-    let variants: any[] = [];
+    let variants: Array<{
+      attributes: Record<string, string>;
+      price?: number;
+      stock?: number;
+      sku?: string;
+      image?: string;
+    }> = [];
     if (formData.get('variants')) {
       try {
         variants = JSON.parse(formData.get('variants') as string);
 
         // Ensure correct format: [{ attributes: {...}, price, stock, image }]
-        variants = variants.map((v) => ({
-          attributes: v.attributes || {},
-          price: v.price ? Number.parseFloat(v.price) : undefined,
-          stock: v.stock ? Number.parseInt(v.stock) : 0,
-          sku: v.sku || undefined,
-          image: v.image || undefined
+        const raw = variants as unknown as Array<Record<string, unknown>>;
+        variants = raw.map((v) => ({
+          attributes: (v.attributes as Record<string, string>) || {},
+          price: v.price ? Number(v.price) : undefined,
+          stock: v.stock ? parseInt(String(v.stock)) : 0,
+          sku: v.sku ? String(v.sku) : undefined,
+          image: v.image ? String(v.image) : undefined
         }));
       } catch (err) {
         return NextResponse.json(
@@ -199,15 +212,15 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create product error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
-    if (error.code === 11000) {
+    if (isMongooseDuplicateKey(error)) {
       return NextResponse.json(
         { error: 'SKU or barcode already exists' },
         { status: 409 }
@@ -245,7 +258,7 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
-    const query: any = {};
+    const query: Record<string, unknown> = {};
 
     if (search) {
       const safeSearch = escapeRegex(search);

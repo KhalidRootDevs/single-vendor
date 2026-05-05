@@ -3,6 +3,8 @@ import { Product } from '@/models/Product';
 import { Category } from '@/models/Category';
 import connectDB from '@/lib/database';
 
+export const dynamic = 'force-dynamic';
+
 // Only fetch the fields the listing UI actually uses — avoids shipping variants,
 // seo, barcode, dimensions, cost, etc. across the wire on every page load.
 const LISTING_PROJECTION = {
@@ -110,7 +112,7 @@ export async function GET(request: NextRequest) {
         .select('_id')
         .lean();
 
-      const categoryIds = matchedCategories.map((c: any) => c._id);
+      const categoryIds = matchedCategories.map((c) => c._id);
       if (categoryIds.length > 0) {
         query.categoryId = { $in: categoryIds };
       }

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { User } from '@/models/User';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
+import { isMongooseValidationError, isMongooseDuplicateKey } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
@@ -66,7 +70,7 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    await user.addNote(content, decoded.userId);
+    await user.addNote(content, new mongoose.Types.ObjectId(decoded.userId));
 
     const updatedUser = await User.findById(params.id)
       .populate('notes.createdBy', 'name email')
@@ -126,11 +130,11 @@ export async function PATCH(
       message: 'User status updated successfully',
       user
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update user status error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
@@ -179,15 +183,15 @@ export async function PUT(
       message: 'User updated successfully',
       user
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update user error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
-    if (error.code === 11000) {
+    if (isMongooseDuplicateKey(error)) {
       return NextResponse.json(
         { error: 'Email already exists' },
         { status: 409 }

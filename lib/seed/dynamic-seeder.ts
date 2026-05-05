@@ -146,6 +146,15 @@ const CATEGORY_STRUCTURE = [
   }
 ];
 
+interface ProductConfig {
+  brands: string[];
+  features: string[];
+  colors?: string[];
+  storage?: string[];
+  processors?: string[];
+  editions?: string[];
+}
+
 interface SeederOptions {
   categoriesCount: number;
   productsCount: number;
@@ -178,7 +187,9 @@ export class DynamicSeeder {
 
       // Create categories
       const categories = await this.createCategories(options.categoriesCount);
-      this.createdCategories = categories.map((cat) => cat._id);
+      this.createdCategories = categories.map(
+        (cat) => cat._id as mongoose.Types.ObjectId
+      );
 
       // Create products
       const products = await this.createProducts(options.productsCount);
@@ -227,7 +238,7 @@ export class DynamicSeeder {
           name: childName,
           description: faker.commerce.productDescription(),
           featured: faker.datatype.boolean({ probability: 0.2 }),
-          parentId: mainCat._id
+          parentId: mainCat._id as mongoose.Types.ObjectId
         });
         categories.push(childCat);
         usedNames.add(childName);
@@ -244,8 +255,8 @@ export class DynamicSeeder {
         featured: faker.datatype.boolean({ probability: 0.2 }),
         parentId:
           categories.length > 0 && faker.datatype.boolean({ probability: 0.3 })
-            ? faker.helpers.arrayElement(categories.filter((c) => !c.parentId))
-                ._id
+            ? (faker.helpers.arrayElement(categories.filter((c) => !c.parentId))
+                ._id as mongoose.Types.ObjectId)
             : null
       });
 
@@ -311,7 +322,7 @@ export class DynamicSeeder {
     return faker.helpers.arrayElement(types);
   }
 
-  private async createProduct(config: any, productType: string) {
+  private async createProduct(config: ProductConfig, productType: string) {
     const brand = faker.helpers.arrayElement(config.brands);
     const productName = `${brand} ${faker.commerce.productName()}`;
 
@@ -374,7 +385,11 @@ export class DynamicSeeder {
     return await Product.create(productData);
   }
 
-  private createVariants(count: number, config: any, basePrice: number) {
+  private createVariants(
+    count: number,
+    config: ProductConfig,
+    basePrice: number
+  ) {
     const variants = [];
     const usedCombinations = new Set<string>();
 

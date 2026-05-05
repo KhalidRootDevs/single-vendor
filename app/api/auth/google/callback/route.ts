@@ -3,6 +3,8 @@ import connectDB from '@/lib/database';
 import { User } from '@/models/User';
 import { generateToken } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 interface GoogleTokenResponse {
   access_token: string;
   id_token: string;

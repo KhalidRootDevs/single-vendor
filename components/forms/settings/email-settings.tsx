@@ -1,4 +1,3 @@
-import { SettingsFormData } from '@/app/(admin)/admin/settings/page';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -17,6 +16,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { SettingsFormData } from '@/lib/validations';
 import { useFormContext } from 'react-hook-form';
 
 export default function EmailSettings({

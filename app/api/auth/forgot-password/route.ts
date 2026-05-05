@@ -4,6 +4,8 @@ import connectDB from '@/lib/database';
 import { User } from '@/models/User';
 import { sendPasswordResetEmail } from '@/lib/email';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const { email } = await request.json();

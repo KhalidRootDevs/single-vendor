@@ -14,7 +14,7 @@ import { useState } from 'react';
 export function RecentlyViewed() {
   const { items, clearHistory } = useRecentlyViewed();
   const { addItem } = useCart();
-  const [isAddingToCart, setIsAddingToCart] = useState<number | null>(null);
+  const [isAddingToCart, setIsAddingToCart] = useState<string | null>(null);
 
   if (items.length === 0) return null;
 
@@ -24,7 +24,6 @@ export function RecentlyViewed() {
     // Simulate a slight delay for better UX
     setTimeout(() => {
       addItem({
-        id: Date.now(),
         productId: item.id,
         name: item.name,
         price: item.price,

@@ -4,7 +4,13 @@ import { Product } from '@/models/Product';
 import { verifyToken } from '@/lib/auth';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/cloudinary';
 import connectDB from '@/lib/database';
-import { extractPublicIdFromUrl } from '@/lib/utils';
+import {
+  extractPublicIdFromUrl,
+  isMongooseValidationError,
+  isMongooseDuplicateKey
+} from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
@@ -196,7 +202,7 @@ export async function PUT(
     }
 
     // Prepare update payload
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       ...(name && { name }),
       ...(description && { description }),
       ...(price !== undefined && { price }),
@@ -228,15 +234,15 @@ export async function PUT(
       message: 'Product updated successfully',
       product: updatedProduct
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update product error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
-    if (error.code === 11000) {
+    if (isMongooseDuplicateKey(error)) {
       return NextResponse.json(
         { error: 'SKU or barcode already exists' },
         { status: 409 }

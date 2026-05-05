@@ -91,8 +91,10 @@ export function useDashboard(range: string = '30d') {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json: DashboardData = await res.json();
       setData(json);
-    } catch (err: any) {
-      setError(err.message ?? 'Failed to load dashboard data');
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to load dashboard data'
+      );
     } finally {
       setIsLoading(false);
     }

@@ -10,7 +10,7 @@ import {
 } from 'react';
 
 interface RecentlyViewedItem {
-  id: number;
+  id: string;
   name: string;
   price: number;
   image: string;

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-
+import mongoose from 'mongoose';
 import { User } from '@/models/User';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(
   request: NextRequest,
@@ -32,7 +34,7 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    await user.addNote(content, decoded.userId);
+    await user.addNote(content, new mongoose.Types.ObjectId(decoded.userId));
 
     const updatedUser = await User.findById(params.id)
       .populate('notes.createdBy', 'name email')

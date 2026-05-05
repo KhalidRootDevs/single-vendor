@@ -1,4 +1,3 @@
-import { SettingsFormData } from '@/app/(admin)/admin/settings/page';
 import {
   Card,
   CardContent,
@@ -10,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { SettingsFormData } from '@/lib/validations';
 import { useFormContext } from 'react-hook-form';
 
 export default function Shipping({

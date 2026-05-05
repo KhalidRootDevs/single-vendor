@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Settings } from '@/models/Settings';
 import connectDB from '@/lib/database';
+import { isMongooseValidationError } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 export async function PATCH(
   request: NextRequest,
@@ -54,10 +57,10 @@ export async function PATCH(
         section.charAt(0).toUpperCase() + section.slice(1)
       } settings updated successfully`
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Update ${params.section} settings error:`, error);
 
-    if (error instanceof mongoose.Error.ValidationError) {
+    if (isMongooseValidationError(error)) {
       return NextResponse.json(
         { error: 'Validation error', details: error.errors },
         { status: 400 }

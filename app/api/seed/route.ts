@@ -2,6 +2,8 @@ import { clearDatabase, seedDynamic } from '@/lib/seed/dynamic-seeder';
 import { verifyToken } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json(

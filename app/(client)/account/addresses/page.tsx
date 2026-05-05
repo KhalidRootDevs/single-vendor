@@ -542,7 +542,9 @@ export default function AddressesPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleSetDefault(address._id)}
+                        onClick={() => {
+                          if (address._id) handleSetDefault(address._id);
+                        }}
                       >
                         Set Default
                       </Button>

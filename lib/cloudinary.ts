@@ -43,7 +43,14 @@ export const uploadToCloudinary = async (
   file: Blob,
   options?: {
     folder?: string;
-    transformation?: any[];
+    transformation?: Array<{
+      width?: number;
+      height?: number;
+      crop?: 'fill' | 'limit' | 'scale' | 'fit' | 'thumb';
+      quality?: 'auto' | number;
+      format?: 'webp' | 'jpg' | 'png' | 'auto';
+      [key: string]: unknown;
+    }>;
     resourceType?: 'image' | 'video' | 'auto' | 'raw';
   }
 ): Promise<{ secure_url: string; public_id: string }> => {

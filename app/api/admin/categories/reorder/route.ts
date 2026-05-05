@@ -4,6 +4,8 @@ import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 import { Category } from '@/models/Category';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     await connectDB();

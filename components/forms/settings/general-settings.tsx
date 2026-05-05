@@ -1,4 +1,3 @@
-import { SettingsFormData } from '@/app/(admin)/admin/settings/page';
 import {
   Card,
   CardContent,
@@ -9,6 +8,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { SettingsFormData } from '@/lib/validations';
 import Image from 'next/image';
 import { useFormContext } from 'react-hook-form';
 

@@ -1,7 +1,11 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { Order, type OrderStatus } from '@/models/Order';
+import mongoose from 'mongoose';
+import { Order, type OrderStatus, type ITimelineEvent } from '@/models/Order';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
+import { isMongooseValidationError } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/orders/[id]
@@ -69,17 +73,9 @@ export async function GET(
     const normalizedOrder = {
       ...orderObject,
       customer: {
-        id: orderObject.customer.id?._id
-          ? orderObject.customer.id._id.toString()
-          : orderObject.customer.id?.toString() || userId,
-        name:
-          orderObject.customer.name ||
-          orderObject.customer.id?.name ||
-          'Customer',
-        email:
-          orderObject.customer.email ||
-          orderObject.customer.id?.email ||
-          'unknown@example.com',
+        id: orderObject.customer.id?.toString() || userId,
+        name: orderObject.customer.name || 'Customer',
+        email: orderObject.customer.email || 'unknown@example.com',
         phone:
           orderObject.customer.phone ||
           orderObject.shippingAddress?.phone ||
@@ -89,28 +85,28 @@ export async function GET(
           orderObject.shippingAddress?.address ||
           'N/A'
       },
-      timeline: orderObject.timeline.map((event: any) => ({
-        status: event.status,
-        date: event.date,
-        description: event.description,
-        updatedBy: event.updatedBy
-          ? {
-              name: event.updatedBy.name || 'System',
-              email: event.updatedBy.email || 'system'
-            }
-          : undefined
-      }))
+      timeline: orderObject.timeline.map((event: ITimelineEvent) => {
+        const populatedBy = event.updatedBy as unknown as
+          | { name?: string; email?: string }
+          | undefined;
+        return {
+          status: event.status,
+          date: event.date,
+          description: event.description,
+          updatedBy: populatedBy
+            ? {
+                name: populatedBy.name || 'System',
+                email: populatedBy.email || 'system'
+              }
+            : undefined
+        };
+      })
     };
 
     console.log('✅ Successfully normalized order data');
     return NextResponse.json({ order: normalizedOrder });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Get user order error:', error);
-    console.error('Error details:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -183,11 +179,11 @@ export async function PUT(
       message: 'Order updated successfully',
       order: updatedOrder
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update order error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
@@ -246,7 +242,7 @@ export async function DELETE(
       description: `Order cancelled by ${
         decoded.role === 'admin' ? 'admin' : 'customer'
       }`,
-      updatedBy: decoded.userId
+      updatedBy: new mongoose.Types.ObjectId(decoded.userId)
     });
 
     await order.save();

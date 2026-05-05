@@ -4,6 +4,13 @@ import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import type { IOrderItem } from '@/models/Order';
+
+export const dynamic = 'force-dynamic';
+
+interface JsPDFWithAutoTable extends jsPDF {
+  lastAutoTable: { finalY: number };
+}
 
 /**
  * GET /api/user/orders/[id]/invoice
@@ -37,6 +44,13 @@ export async function GET(
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    if (!order.shippingAddress) {
+      return NextResponse.json(
+        { error: 'Order has no shipping address' },
+        { status: 422 }
+      );
     }
 
     // Create PDF invoice
@@ -121,7 +135,7 @@ export async function GET(
 
     // Add order items table
     const tableColumn = ['Item', 'Price', 'Qty', 'Total'];
-    const tableRows = order.items.map((item: any) => [
+    const tableRows = order.items.map((item: IOrderItem) => [
       item.name,
       `$${item.price.toFixed(2)}`,
       item.quantity,
@@ -144,7 +158,7 @@ export async function GET(
       margin: { left: 14, right: 14 }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
 
     // Add order summary
     doc.setFontSize(10);

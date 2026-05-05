@@ -4,6 +4,9 @@ import { verifyToken } from '@/lib/auth';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import connectDB from '@/lib/database';
 import { Category } from '@/models/Category';
+import { isMongooseValidationError, isMongooseDuplicateKey } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
@@ -100,15 +103,15 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create category error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
-    if (error.code === 11000) {
+    if (isMongooseDuplicateKey(error)) {
       return NextResponse.json(
         { error: 'Category with this name or slug already exists' },
         { status: 409 }
@@ -135,7 +138,7 @@ export async function GET(request: NextRequest) {
     const parentId = searchParams.get('parentId');
 
     // Build query
-    const query: any = {};
+    const query: Record<string, unknown> = {};
 
     // Search filter
     if (search) {

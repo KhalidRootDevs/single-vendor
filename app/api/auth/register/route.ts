@@ -4,6 +4,9 @@ import { User } from '@/models/User';
 import { generateToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 import { sendVerificationEmail } from '@/lib/email';
+import { isMongooseValidationError } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
@@ -79,11 +82,11 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Registration error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 

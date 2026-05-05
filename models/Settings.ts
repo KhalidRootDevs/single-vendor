@@ -1,4 +1,4 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface ISettings extends Document {
   general: {
@@ -540,6 +540,10 @@ const settingsSchema = new Schema(
   }
 );
 
+export interface ISettingsModel extends Model<ISettings> {
+  getSettings(): Promise<ISettings>;
+}
+
 // Ensure only one settings document exists
 settingsSchema.statics.getSettings = async function () {
   let settings = await this.findOne();
@@ -549,6 +553,6 @@ settingsSchema.statics.getSettings = async function () {
   return settings;
 };
 
-export const Settings =
-  mongoose.models.Settings ||
-  mongoose.model<ISettings>('Settings', settingsSchema);
+export const Settings: ISettingsModel =
+  (mongoose.models.Settings as ISettingsModel) ||
+  mongoose.model<ISettings, ISettingsModel>('Settings', settingsSchema);

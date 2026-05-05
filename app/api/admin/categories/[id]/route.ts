@@ -4,6 +4,9 @@ import { Category } from '@/models/Category';
 import { verifyToken } from '@/lib/auth';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import connectDB from '@/lib/database';
+import { isMongooseValidationError } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
@@ -138,11 +141,11 @@ export async function PUT(
       message: 'Category updated successfully',
       category: updatedCategory
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update category error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 

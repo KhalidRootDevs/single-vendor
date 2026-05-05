@@ -1,5 +1,7 @@
 'use client';
 
+import { DataTable } from '@/components/tables/data-table';
+import { createUserColumns } from '@/components/tables/user/columns';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -8,14 +10,12 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
+import { toast } from '@/components/ui/use-toast';
+import { PaginationInfo, User } from '@/types';
 import { UserPlus } from 'lucide-react';
 import Link from 'next/link';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { toast } from '@/components/ui/use-toast';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { DataTable } from '@/components/tables/data-table';
-import { createUserColumns, User } from '@/components/tables/user/columns';
-import { PaginationInfo } from '@/types';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export default function UsersPage() {
   const router = useRouter();

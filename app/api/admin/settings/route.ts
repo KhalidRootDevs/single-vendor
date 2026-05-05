@@ -3,6 +3,8 @@ import { Settings } from '@/models/Settings';
 import connectDB from '@/lib/database';
 import mongoose from 'mongoose';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     await connectDB();

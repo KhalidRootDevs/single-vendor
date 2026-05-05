@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import connectDB from '@/lib/database';
 import { User } from '@/models/User';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const { token, password } = await request.json();

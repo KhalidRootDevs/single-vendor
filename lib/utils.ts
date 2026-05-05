@@ -86,32 +86,66 @@ export function extractPublicIdFromUrl(url: string): string | null {
 }
 
 export default function objectToFormData(
-  obj: any,
+  obj: Record<string, unknown>,
   ignore: string[] | null | undefined = []
-) {
+): FormData {
   const formData = new FormData();
 
   if (!Array.isArray(ignore)) {
     ignore = [];
   }
 
-  Object.keys(obj).forEach((key: any) => {
+  Object.keys(obj).forEach((key: string) => {
     if (!ignore.includes(key) && obj[key] !== '') {
       if (Array.isArray(obj[key])) {
-        obj[key].forEach((item: any, index: number) => {
+        (obj[key] as unknown[]).forEach((item: unknown, index: number) => {
           if (typeof item === 'object' && item !== null) {
-            Object.keys(item).forEach((subKey) => {
-              formData.append(`${key}[${index}][${subKey}]`, item[subKey]);
+            Object.keys(item as Record<string, unknown>).forEach((subKey) => {
+              formData.append(
+                `${key}[${index}][${subKey}]`,
+                (item as Record<string, string>)[subKey]
+              );
             });
           } else {
-            formData.append(`${key}[]`, item);
+            formData.append(`${key}[]`, item as string);
           }
         });
       } else {
-        formData.append(key, obj[key]);
+        formData.append(key, obj[key] as string | Blob);
       }
     }
   });
 
   return formData;
+}
+
+export interface MongooseValidationError extends Error {
+  name: 'ValidationError';
+  errors: Record<string, { message: string }>;
+}
+
+export function isMongooseValidationError(
+  error: unknown
+): error is MongooseValidationError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as Error).name === 'ValidationError' &&
+    'errors' in error
+  );
+}
+
+export function isMongooseDuplicateKey(
+  error: unknown
+): error is { code: number } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: number }).code === 11000
+  );
+}
+
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
 }

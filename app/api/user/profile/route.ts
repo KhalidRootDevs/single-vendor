@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { User } from '@/models/User';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
+import { isMongooseValidationError } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 // app/api/user/profile/route.ts - Update the PUT method
 export async function PUT(request: NextRequest) {
   try {
@@ -40,7 +43,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Prepare update data
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       name,
       email,
       ...(phone !== undefined && { phone }),
@@ -61,15 +64,15 @@ export async function PUT(request: NextRequest) {
       message: 'Profile updated successfully',
       user: updatedUser
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Profile update error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
-    if (error.name === 'JsonWebTokenError') {
+    if (error instanceof Error && error.name === 'JsonWebTokenError') {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 

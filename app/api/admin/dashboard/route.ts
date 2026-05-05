@@ -4,6 +4,8 @@ import { Order } from '@/models/Order';
 import { Product } from '@/models/Product';
 import { User } from '@/models/User';
 
+export const dynamic = 'force-dynamic';
+
 // Month labels indexed 1-12
 const MONTH_LABELS = [
   'Jan',

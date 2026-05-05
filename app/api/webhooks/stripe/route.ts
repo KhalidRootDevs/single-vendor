@@ -4,6 +4,8 @@ import { Order } from '@/models/Order';
 import connectDB from '@/lib/database';
 import { getStripeConfigAdmin } from '@/lib/admin-settings';
 
+export const dynamic = 'force-dynamic';
+
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
@@ -38,16 +40,16 @@ export async function POST(request: NextRequest) {
   }
 
   const stripe = new Stripe(stripeConfig.secretKey, {
-    apiVersion: '2025-03-31.basil'
+    apiVersion: '2025-09-30.clover'
   });
 
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error(
       '[Stripe Webhook] Signature verification failed:',
-      err.message
+      err instanceof Error ? err.message : String(err)
     );
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }

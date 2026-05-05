@@ -5,6 +5,8 @@ import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 import { escapeRegex } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
@@ -24,7 +26,7 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get('role');
 
     // Build query
-    const query: any = {};
+    const query: Record<string, unknown> = {};
 
     if (search) {
       const safeSearch = escapeRegex(search);

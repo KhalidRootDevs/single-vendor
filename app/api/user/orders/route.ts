@@ -3,6 +3,8 @@ import { Order } from '@/models/Order';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/user/orders
  * Get all orders for the authenticated user

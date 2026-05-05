@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/card';
 import { Container } from '@/components/ui/container';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/use-toast';
 import {
@@ -23,325 +24,216 @@ import {
   CreditCard,
   Download,
   ExternalLink,
+  Package,
   Receipt,
   RefreshCw,
   User,
   XCircle
 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
 
-// Mock payment data (same as in the list page)
-const payments = {
-  'PAY-001': {
-    id: 'PAY-001',
-    transactionId: 'txn_1234567890abcdef',
-    orderId: 'ORD-001',
-    customer: {
-      id: 'CUST-001',
-      name: 'John Doe',
-      email: 'john.doe@example.com',
-      phone: '+1 (555) 123-4567'
-    },
-    date: '2023-06-15T14:35:12Z',
-    amount: 159.98,
-    fee: 4.95,
-    net: 155.03,
-    method: 'Credit Card',
-    cardDetails: {
-      type: 'Visa',
-      last4: '4242',
-      expiryMonth: '12',
-      expiryYear: '2025',
-      country: 'US'
-    },
-    status: 'Completed',
-    currency: 'USD',
-    description: 'Payment for Order ORD-001',
-    billingAddress: {
-      line1: '123 Main St',
-      line2: 'Apt 4B',
-      city: 'New York',
-      state: 'NY',
-      postalCode: '10001',
-      country: 'USA'
-    },
-    timeline: [
-      {
-        status: 'Initiated',
-        date: '2023-06-15T14:35:00Z',
-        description: 'Payment initiated by customer'
-      },
-      {
-        status: 'Processing',
-        date: '2023-06-15T14:35:05Z',
-        description: 'Payment being processed by payment gateway'
-      },
-      {
-        status: 'Completed',
-        date: '2023-06-15T14:35:12Z',
-        description: 'Payment successfully completed'
-      }
-    ],
-    metadata: {
-      ipAddress: '192.168.1.1',
-      userAgent: 'Mozilla/5.0...',
-      riskScore: 'Low'
-    }
+interface PaymentDetail {
+  _id: string;
+  orderNumber: string;
+  customer: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+  };
+  createdAt: string;
+  total: number;
+  subtotal: number;
+  tax: number;
+  shipping: number;
+  discount?: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  cardDetails?: {
+    type: string;
+    last4: string;
+    brand?: string;
+    expiryMonth?: number;
+    expiryYear?: number;
+  } | null;
+  status: string;
+  shippingMethod: string;
+  trackingNumber?: string | null;
+  notes?: string | null;
+  timeline: Array<{
+    status: string;
+    date: string;
+    description: string;
+  }>;
+  billingAddress?: {
+    fullName: string;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+  } | null;
+  shippingAddress?: {
+    fullName: string;
+    address: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+    phone: string;
+  } | null;
+  items: Array<{
+    name: string;
+    price: number;
+    quantity: number;
+    image: string;
+    sku?: string | null;
+  }>;
+}
+
+const PAYMENT_STATUS_MAP: Record<
+  string,
+  { label: string; color: string; icon: React.ReactNode }
+> = {
+  paid: {
+    label: 'Paid',
+    color: 'bg-green-100 text-green-800',
+    icon: <CheckCircle className="h-5 w-5 text-green-600" />
   },
-  'PAY-002': {
-    id: 'PAY-002',
-    transactionId: 'txn_abcdef1234567890',
-    orderId: 'ORD-002',
-    customer: {
-      id: 'CUST-002',
-      name: 'Jane Smith',
-      email: 'jane.smith@example.com',
-      phone: '+1 (555) 987-6543'
-    },
-    date: '2023-06-14T10:16:05Z',
-    amount: 79.99,
-    fee: 2.55,
-    net: 77.44,
-    method: 'PayPal',
-    paypalDetails: {
-      email: 'jane.smith@example.com',
-      payerId: 'PAYERID123456'
-    },
-    status: 'Completed',
-    currency: 'USD',
-    description: 'Payment for Order ORD-002',
-    billingAddress: {
-      line1: '456 Oak Ave',
-      city: 'Somewhere',
-      state: 'CA',
-      postalCode: '90210',
-      country: 'USA'
-    },
-    timeline: [
-      {
-        status: 'Initiated',
-        date: '2023-06-14T10:15:55Z',
-        description: 'Payment initiated via PayPal'
-      },
-      {
-        status: 'Completed',
-        date: '2023-06-14T10:16:05Z',
-        description: 'PayPal payment completed'
-      }
-    ],
-    metadata: {
-      ipAddress: '192.168.1.2',
-      userAgent: 'Mozilla/5.0...',
-      riskScore: 'Low'
-    }
+  pending: {
+    label: 'Pending',
+    color: 'bg-yellow-100 text-yellow-800',
+    icon: <Clock className="h-5 w-5 text-yellow-600" />
   },
-  'PAY-003': {
-    id: 'PAY-003',
-    transactionId: 'txn_xyz9876543210abc',
-    orderId: 'ORD-003',
-    customer: {
-      id: 'CUST-003',
-      name: 'Robert Johnson',
-      email: 'robert.johnson@example.com',
-      phone: '+1 (555) 456-7890'
-    },
-    date: '2023-06-14T16:47:10Z',
-    amount: 249.97,
-    fee: 7.75,
-    net: 242.22,
-    method: 'Credit Card',
-    cardDetails: {
-      type: 'Mastercard',
-      last4: '5678',
-      expiryMonth: '08',
-      expiryYear: '2026',
-      country: 'US'
-    },
-    status: 'Completed',
-    currency: 'USD',
-    description: 'Payment for Order ORD-003',
-    billingAddress: {
-      line1: '789 Pine St',
-      city: 'Elsewhere',
-      state: 'TX',
-      postalCode: '75001',
-      country: 'USA'
-    },
-    timeline: [
-      {
-        status: 'Initiated',
-        date: '2023-06-14T16:47:00Z',
-        description: 'Payment initiated by customer'
-      },
-      {
-        status: 'Processing',
-        date: '2023-06-14T16:47:03Z',
-        description: 'Payment being processed'
-      },
-      {
-        status: 'Completed',
-        date: '2023-06-14T16:47:10Z',
-        description: 'Payment successfully completed'
-      }
-    ],
-    metadata: {
-      ipAddress: '192.168.1.3',
-      userAgent: 'Mozilla/5.0...',
-      riskScore: 'Low'
-    }
+  failed: {
+    label: 'Failed',
+    color: 'bg-red-100 text-red-800',
+    icon: <XCircle className="h-5 w-5 text-red-600" />
   },
-  'PAY-005': {
-    id: 'PAY-005',
-    transactionId: 'txn_failed789xyz',
-    orderId: 'ORD-009',
-    customer: {
-      id: 'CUST-009',
-      name: 'Michael Brown',
-      email: 'michael.brown@example.com',
-      phone: '+1 (555) 321-9876'
-    },
-    date: '2023-06-09T15:45:20Z',
-    amount: 89.99,
-    fee: 0,
-    net: 0,
-    method: 'Credit Card',
-    cardDetails: {
-      type: 'Visa',
-      last4: '1234',
-      expiryMonth: '03',
-      expiryYear: '2024',
-      country: 'US'
-    },
-    status: 'Failed',
-    currency: 'USD',
-    description: 'Payment for Order ORD-009',
-    failureReason: 'Insufficient funds',
-    billingAddress: {
-      line1: '321 Elm St',
-      city: 'Anytown',
-      state: 'FL',
-      postalCode: '33101',
-      country: 'USA'
-    },
-    timeline: [
-      {
-        status: 'Initiated',
-        date: '2023-06-09T15:45:10Z',
-        description: 'Payment initiated by customer'
-      },
-      {
-        status: 'Failed',
-        date: '2023-06-09T15:45:20Z',
-        description: 'Payment failed: Insufficient funds'
-      }
-    ],
-    metadata: {
-      ipAddress: '192.168.1.5',
-      userAgent: 'Mozilla/5.0...',
-      riskScore: 'Medium'
-    }
-  },
-  'PAY-006': {
-    id: 'PAY-006',
-    transactionId: 'txn_refund456def',
-    orderId: 'ORD-005',
-    customer: {
-      id: 'CUST-005',
-      name: 'Michael Wilson',
-      email: 'michael.wilson@example.com',
-      phone: '+1 (555) 876-5432'
-    },
-    date: '2023-06-12T11:30:15Z',
-    amount: -89.98,
-    fee: -2.79,
-    net: -87.19,
-    method: 'Credit Card',
-    cardDetails: {
-      type: 'Visa',
-      last4: '9876',
-      expiryMonth: '06',
-      expiryYear: '2025',
-      country: 'US'
-    },
-    status: 'Refunded',
-    currency: 'USD',
-    description: 'Refund for Order ORD-005',
-    refundReason: 'Customer requested cancellation',
-    originalPaymentId: 'PAY-005-ORIGINAL',
-    billingAddress: {
-      line1: '654 Maple Dr',
-      city: 'Springfield',
-      state: 'IL',
-      postalCode: '62701',
-      country: 'USA'
-    },
-    timeline: [
-      {
-        status: 'Refund Initiated',
-        date: '2023-06-12T11:30:00Z',
-        description: 'Refund initiated by admin'
-      },
-      {
-        status: 'Refunded',
-        date: '2023-06-12T11:30:15Z',
-        description: 'Refund successfully processed'
-      }
-    ],
-    metadata: {
-      ipAddress: 'Admin Panel',
-      userAgent: 'Admin',
-      riskScore: 'N/A'
-    }
+  refunded: {
+    label: 'Refunded',
+    color: 'bg-purple-100 text-purple-800',
+    icon: <RefreshCw className="h-5 w-5 text-purple-600" />
   }
 };
 
-// Status badge colors
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'Completed':
-      return 'bg-green-100 text-green-800';
-    case 'Processing':
-      return 'bg-blue-100 text-blue-800';
-    case 'Pending':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'Failed':
-      return 'bg-red-100 text-red-800';
-    case 'Refunded':
-      return 'bg-purple-100 text-purple-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  credit_card: 'Credit Card',
+  debit_card: 'Debit Card',
+  paypal: 'PayPal',
+  bank_transfer: 'Bank Transfer',
+  cash_on_delivery: 'Cash on Delivery'
 };
 
-// Status icon
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'Completed':
-      return <CheckCircle className="h-5 w-5 text-green-600" />;
-    case 'Processing':
-      return <Clock className="h-5 w-5 text-blue-600" />;
-    case 'Pending':
-      return <Clock className="h-5 w-5 text-yellow-600" />;
-    case 'Failed':
-      return <XCircle className="h-5 w-5 text-red-600" />;
-    case 'Refunded':
-      return <RefreshCw className="h-5 w-5 text-purple-600" />;
-    default:
-      return <AlertCircle className="h-5 w-5 text-gray-600" />;
-  }
-};
+function formatDate(dateString: string) {
+  return new Date(dateString).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+function getStatusInfo(paymentStatus: string) {
+  return (
+    PAYMENT_STATUS_MAP[paymentStatus] ?? {
+      label: paymentStatus,
+      color: 'bg-gray-100 text-gray-800',
+      icon: <AlertCircle className="h-5 w-5 text-gray-600" />
+    }
+  );
+}
 
 export default function PaymentDetailsPage() {
   const params = useParams();
-  const router = useRouter();
-  const paymentId = params.id as string;
-  const payment = payments[paymentId as keyof typeof payments];
+  const id = params.id as string;
 
+  const [payment, setPayment] = useState<PaymentDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isRefunding, setIsRefunding] = useState(false);
 
-  if (!payment) {
+  const fetchPayment = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/payments/${id}`, {
+        credentials: 'include'
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? 'Failed to load payment');
+      }
+      const data = await res.json();
+      setPayment(data.payment);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load payment');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    fetchPayment();
+  }, [fetchPayment]);
+
+  const handleRefund = async () => {
+    setIsRefunding(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      toast({
+        title: 'Refund initiated',
+        description:
+          'The refund has been initiated and will be processed shortly.'
+      });
+    } finally {
+      setIsRefunding(false);
+    }
+  };
+
+  const downloadReceipt = () => {
+    toast({
+      title: 'Receipt downloaded',
+      description: 'The payment receipt has been downloaded.'
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <Container>
+        <div className="space-y-6">
+          <div className="flex items-center gap-4">
+            <Link href="/admin/payments">
+              <Button variant="outline" size="icon">
+                <ArrowLeft className="h-4 w-4" />
+                <span className="sr-only">Back</span>
+              </Button>
+            </Link>
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-48" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="space-y-6 md:col-span-2">
+              <Skeleton className="h-48 w-full rounded-lg" />
+              <Skeleton className="h-64 w-full rounded-lg" />
+            </div>
+            <div className="space-y-6">
+              <Skeleton className="h-40 w-full rounded-lg" />
+              <Skeleton className="h-40 w-full rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </Container>
+    );
+  }
+
+  if (error || !payment) {
     return (
       <Container>
         <div className="mb-6 flex items-center gap-4">
@@ -356,50 +248,22 @@ export default function PaymentDetailsPage() {
               Payment Not Found
             </h2>
             <p className="text-muted-foreground">
-              The requested payment does not exist.
+              {error ?? 'The requested payment does not exist.'}
             </p>
           </div>
         </div>
+        <Button variant="outline" onClick={fetchPayment}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Retry
+        </Button>
       </Container>
     );
   }
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  };
-
-  // Handle refund
-  const handleRefund = async () => {
-    setIsRefunding(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    toast({
-      title: 'Refund initiated',
-      description:
-        'The refund has been successfully initiated and will be processed shortly.'
-    });
-
-    setIsRefunding(false);
-  };
-
-  // Download receipt
-  const downloadReceipt = () => {
-    toast({
-      title: 'Receipt downloaded',
-      description: 'The payment receipt has been downloaded.'
-    });
-  };
+  const statusInfo = getStatusInfo(payment.paymentStatus);
+  const isCard =
+    payment.paymentMethod === 'credit_card' ||
+    payment.paymentMethod === 'debit_card';
 
   return (
     <Container>
@@ -414,11 +278,11 @@ export default function PaymentDetailsPage() {
             </Link>
             <div>
               <h2 className="text-2xl font-bold tracking-tight">
-                Payment {payment.id}
+                {payment.orderNumber}
               </h2>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-4 w-4" />
-                <span>{formatDate(payment.date)}</span>
+                <span>{formatDate(payment.createdAt)}</span>
               </div>
             </div>
           </div>
@@ -427,7 +291,7 @@ export default function PaymentDetailsPage() {
               <Download className="mr-2 h-4 w-4" />
               Download Receipt
             </Button>
-            {payment.status === 'Completed' && payment.amount > 0 && (
+            {payment.paymentStatus === 'paid' && (
               <Button
                 variant="outline"
                 size="sm"
@@ -436,7 +300,7 @@ export default function PaymentDetailsPage() {
               >
                 {isRefunding ? (
                   <>
-                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                     Processing...
                   </>
                 ) : (
@@ -450,25 +314,22 @@ export default function PaymentDetailsPage() {
           </div>
         </div>
 
-        {/* Status Alert */}
-        {payment.status === 'Failed' && (
+        {payment.paymentStatus === 'failed' && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Payment Failed</AlertTitle>
             <AlertDescription>
-              {payment.failureReason ||
-                'This payment transaction failed. Please check the details below.'}
+              This payment transaction failed. Please check the details below.
             </AlertDescription>
           </Alert>
         )}
 
-        {payment.status === 'Refunded' && (
+        {payment.paymentStatus === 'refunded' && (
           <Alert>
             <RefreshCw className="h-4 w-4" />
             <AlertTitle>Payment Refunded</AlertTitle>
             <AlertDescription>
-              {payment.refundReason ||
-                'This payment has been refunded to the customer.'}
+              This payment has been refunded to the customer.
             </AlertDescription>
           </Alert>
         )}
@@ -479,31 +340,27 @@ export default function PaymentDetailsPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle>Payment Summary</CardTitle>
-                <Badge className={getStatusColor(payment.status)}>
-                  {payment.status}
-                </Badge>
+                <Badge className={statusInfo.color}>{statusInfo.label}</Badge>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <div className="text-sm text-muted-foreground">
-                        Transaction ID
+                        Order Number
                       </div>
                       <div className="font-mono text-sm">
-                        {payment.transactionId}
+                        {payment.orderNumber}
                       </div>
                     </div>
                     <div>
                       <div className="text-sm text-muted-foreground">
-                        Order ID
+                        Payment Method
                       </div>
-                      <Link
-                        href={`/admin/orders/${payment.orderId}`}
-                        className="text-primary hover:underline"
-                      >
-                        {payment.orderId}
-                      </Link>
+                      <div className="text-sm font-medium">
+                        {PAYMENT_METHOD_LABEL[payment.paymentMethod] ??
+                          payment.paymentMethod}
+                      </div>
                     </div>
                   </div>
 
@@ -511,73 +368,141 @@ export default function PaymentDetailsPage() {
 
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Amount</span>
+                      <span className="text-muted-foreground">Subtotal</span>
                       <span className="font-medium">
-                        ${Math.abs(payment.amount).toFixed(2)}{' '}
-                        {payment.currency}
+                        ${payment.subtotal.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">
-                        Processing Fee
-                      </span>
+                      <span className="text-muted-foreground">Tax</span>
                       <span className="font-medium">
-                        ${Math.abs(payment.fee).toFixed(2)}
+                        ${payment.tax.toFixed(2)}
                       </span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Shipping</span>
+                      <span className="font-medium">
+                        ${payment.shipping.toFixed(2)}
+                      </span>
+                    </div>
+                    {payment.discount != null && payment.discount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Discount</span>
+                        <span className="font-medium text-green-600">
+                          -${payment.discount.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     <Separator />
                     <div className="flex justify-between text-lg">
-                      <span className="font-semibold">Net Amount</span>
+                      <span className="font-semibold">Total</span>
                       <span className="font-bold">
-                        ${Math.abs(payment.net).toFixed(2)} {payment.currency}
+                        ${payment.total.toFixed(2)} USD
                       </span>
                     </div>
                   </div>
 
-                  {payment.description && (
-                    <>
-                      <Separator />
-                      <div>
-                        <div className="mb-1 text-sm text-muted-foreground">
-                          Description
-                        </div>
-                        <div className="text-sm">{payment.description}</div>
-                      </div>
-                    </>
-                  )}
+                  <Separator />
+                  <div>
+                    <div className="mb-1 text-sm text-muted-foreground">
+                      Description
+                    </div>
+                    <div className="text-sm">
+                      Payment for Order {payment.orderNumber}
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Timeline */}
+            {/* Timeline + Items */}
             <Tabs defaultValue="timeline">
               <TabsList>
                 <TabsTrigger value="timeline">Timeline</TabsTrigger>
-                <TabsTrigger value="metadata">Metadata</TabsTrigger>
+                <TabsTrigger value="items">Items</TabsTrigger>
+                {payment.notes && (
+                  <TabsTrigger value="notes">Notes</TabsTrigger>
+                )}
               </TabsList>
+
               <TabsContent value="timeline" className="mt-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Payment Timeline</CardTitle>
+                    <CardTitle>Order Timeline</CardTitle>
                     <CardDescription>
-                      Track the progress of this payment transaction
+                      Track the progress of this order and payment
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="relative border-l pl-6">
-                      {payment.timeline.map((event, index) => (
-                        <div key={index} className="mb-8 last:mb-0">
-                          <div className="absolute -left-[6.5px] h-3 w-3 rounded-full bg-primary"></div>
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <Badge className={getStatusColor(event.status)}>
-                                {event.status}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDate(event.date)}
-                              </span>
+                    {payment.timeline.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No timeline events yet.
+                      </p>
+                    ) : (
+                      <div className="relative border-l pl-6">
+                        {payment.timeline.map((event, index) => (
+                          <div key={index} className="mb-8 last:mb-0">
+                            <div className="absolute -left-[6.5px] h-3 w-3 rounded-full bg-primary" />
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="capitalize">
+                                  {event.status.replace(/_/g, ' ')}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDate(event.date)}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-sm">
+                                {event.description}
+                              </p>
                             </div>
-                            <p className="mt-1 text-sm">{event.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="items" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Order Items</CardTitle>
+                    <CardDescription>
+                      Items included in this order
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="divide-y">
+                      {payment.items.map((item, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-4 py-3"
+                        >
+                          {item.image && (
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="h-12 w-12 rounded object-cover"
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-medium">
+                              {item.name}
+                            </div>
+                            {item.sku && (
+                              <div className="font-mono text-xs text-muted-foreground">
+                                SKU: {item.sku}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right text-sm">
+                            <div className="font-medium">
+                              ${item.price.toFixed(2)} × {item.quantity}
+                            </div>
+                            <div className="text-muted-foreground">
+                              ${(item.price * item.quantity).toFixed(2)}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -585,69 +510,19 @@ export default function PaymentDetailsPage() {
                   </CardContent>
                 </Card>
               </TabsContent>
-              <TabsContent value="metadata" className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Transaction Metadata</CardTitle>
-                    <CardDescription>
-                      Additional information about this transaction
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {payment.metadata && (
-                        <>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <div className="text-sm text-muted-foreground">
-                                IP Address
-                              </div>
-                              <div className="font-mono text-sm">
-                                {payment.metadata.ipAddress}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-muted-foreground">
-                                Risk Score
-                              </div>
-                              <Badge
-                                variant="outline"
-                                className={
-                                  payment.metadata.riskScore === 'Low'
-                                    ? 'border-green-200 bg-green-50 text-green-700'
-                                    : payment.metadata.riskScore === 'Medium'
-                                    ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
-                                    : 'border-red-200 bg-red-50 text-red-700'
-                                }
-                              >
-                                {payment.metadata.riskScore}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="mb-1 text-sm text-muted-foreground">
-                              User Agent
-                            </div>
-                            <div className="rounded bg-muted p-2 font-mono text-xs">
-                              {payment.metadata.userAgent}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                      {payment.originalPaymentId && (
-                        <div>
-                          <div className="text-sm text-muted-foreground">
-                            Original Payment ID
-                          </div>
-                          <div className="font-mono text-sm">
-                            {payment.originalPaymentId}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
+
+              {payment.notes && (
+                <TabsContent value="notes" className="mt-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Order Notes</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm">{payment.notes}</p>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
             </Tabs>
           </div>
 
@@ -655,7 +530,7 @@ export default function PaymentDetailsPage() {
             {/* Customer Information */}
             <Card>
               <CardHeader>
-                <CardTitle>Customer Information</CardTitle>
+                <CardTitle>Customer</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -665,8 +540,8 @@ export default function PaymentDetailsPage() {
                     </div>
                     <div>
                       <div className="font-medium">{payment.customer.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        ID: {payment.customer.id}
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {payment.customer.id}
                       </div>
                     </div>
                   </div>
@@ -705,80 +580,86 @@ export default function PaymentDetailsPage() {
                       <CreditCard className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <div className="font-medium">{payment.method}</div>
+                      <div className="font-medium">
+                        {PAYMENT_METHOD_LABEL[payment.paymentMethod] ??
+                          payment.paymentMethod}
+                      </div>
                       {payment.cardDetails && (
                         <div className="text-sm text-muted-foreground">
                           {payment.cardDetails.type} ••
                           {payment.cardDetails.last4}
                         </div>
                       )}
-                      {payment.paypalDetails && (
-                        <div className="text-sm text-muted-foreground">
-                          {payment.paypalDetails.email}
-                        </div>
-                      )}
                     </div>
                   </div>
-                  <Separator />
-                  <div className="space-y-2">
-                    {payment.cardDetails && (
-                      <>
+                  {isCard && payment.cardDetails && (
+                    <>
+                      <Separator />
+                      <div className="space-y-2">
                         <div className="text-sm">
-                          <span className="font-medium">Card Type:</span>{' '}
+                          <span className="font-medium">Type:</span>{' '}
                           {payment.cardDetails.type}
                         </div>
                         <div className="text-sm">
-                          <span className="font-medium">Last 4 Digits:</span>{' '}
+                          <span className="font-medium">Last 4:</span> ••••{' '}
                           {payment.cardDetails.last4}
                         </div>
-                        <div className="text-sm">
-                          <span className="font-medium">Expiry:</span>{' '}
-                          {payment.cardDetails.expiryMonth}/
-                          {payment.cardDetails.expiryYear}
-                        </div>
-                        <div className="text-sm">
-                          <span className="font-medium">Country:</span>{' '}
-                          {payment.cardDetails.country}
-                        </div>
-                      </>
-                    )}
-                    {payment.paypalDetails && (
-                      <>
-                        <div className="text-sm">
-                          <span className="font-medium">PayPal Email:</span>{' '}
-                          {payment.paypalDetails.email}
-                        </div>
-                        <div className="text-sm">
-                          <span className="font-medium">Payer ID:</span>{' '}
-                          {payment.paypalDetails.payerId}
-                        </div>
-                      </>
-                    )}
-                  </div>
+                        {payment.cardDetails.expiryMonth != null &&
+                          payment.cardDetails.expiryYear != null && (
+                            <div className="text-sm">
+                              <span className="font-medium">Expiry:</span>{' '}
+                              {String(payment.cardDetails.expiryMonth).padStart(
+                                2,
+                                '0'
+                              )}
+                              /{payment.cardDetails.expiryYear}
+                            </div>
+                          )}
+                      </div>
+                    </>
+                  )}
+                  {payment.paymentMethod === 'paypal' && (
+                    <>
+                      <Separator />
+                      <div className="text-sm text-muted-foreground">
+                        Payment via PayPal
+                      </div>
+                    </>
+                  )}
+                  {payment.paymentMethod === 'cash_on_delivery' && (
+                    <>
+                      <Separator />
+                      <div className="text-sm text-muted-foreground">
+                        Payment collected on delivery
+                      </div>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
             {/* Billing Address */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Billing Address</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1 text-sm">
-                  <div>{payment.billingAddress.line1}</div>
-                  {payment.billingAddress.line2 && (
-                    <div>{payment.billingAddress.line2}</div>
-                  )}
-                  <div>
-                    {payment.billingAddress.city},{' '}
-                    {payment.billingAddress.state}{' '}
-                    {payment.billingAddress.postalCode}
+            {payment.billingAddress && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Billing Address</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1 text-sm">
+                    <div className="font-medium">
+                      {payment.billingAddress.fullName}
+                    </div>
+                    <div>{payment.billingAddress.address}</div>
+                    <div>
+                      {payment.billingAddress.city},{' '}
+                      {payment.billingAddress.state}{' '}
+                      {payment.billingAddress.zipCode}
+                    </div>
+                    <div>{payment.billingAddress.country}</div>
                   </div>
-                  <div>{payment.billingAddress.country}</div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Related Order */}
             <Card>
@@ -792,20 +673,32 @@ export default function PaymentDetailsPage() {
                       <Receipt className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <div className="font-medium">Order {payment.orderId}</div>
-                      <div className="text-sm text-muted-foreground">
-                        View order details
+                      <div className="font-medium">{payment.orderNumber}</div>
+                      <div className="text-sm capitalize text-muted-foreground">
+                        Status: {payment.status}
                       </div>
                     </div>
+                  </div>
+                  {payment.trackingNumber && (
+                    <div className="text-sm">
+                      <span className="font-medium">Tracking:</span>{' '}
+                      <span className="font-mono">
+                        {payment.trackingNumber}
+                      </span>
+                    </div>
+                  )}
+                  <div className="text-sm">
+                    <span className="font-medium">Shipping:</span>{' '}
+                    {payment.shippingMethod}
                   </div>
                   <Button
                     variant="outline"
                     className="w-full bg-transparent"
                     asChild
                   >
-                    <Link href={`/admin/orders/${payment.orderId}`}>
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      View Order
+                    <Link href={`/admin/orders/${payment._id}`}>
+                      <Package className="mr-2 h-4 w-4" />
+                      View Full Order
                     </Link>
                   </Button>
                 </div>

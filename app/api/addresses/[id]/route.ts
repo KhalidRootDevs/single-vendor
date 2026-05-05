@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Address } from '@/models/Address';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
+import { isMongooseValidationError } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
 
 export async function PUT(
   request: NextRequest,
@@ -39,11 +42,11 @@ export async function PUT(
       message: 'Address updated successfully',
       address: updatedAddress
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update address error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (isMongooseValidationError(error)) {
+      const errors = Object.values(error.errors).map((err) => err.message);
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 

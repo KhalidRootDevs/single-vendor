@@ -1,4 +1,3 @@
-import { SettingsFormData } from '@/app/(admin)/admin/settings/page';
 import {
   Card,
   CardContent,
@@ -16,6 +15,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { SettingsFormData } from '@/lib/validations';
 import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
