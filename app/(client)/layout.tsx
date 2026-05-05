@@ -1,5 +1,7 @@
 import { Footer } from '@/components/layout/client/footer';
 import { Header } from '@/components/layout/client/header';
+import connectDB from '@/lib/database';
+import { Category as CategoryModel } from '@/models/Category';
 import { Category } from '@/types';
 import type { Metadata } from 'next';
 import type React from 'react';
@@ -12,19 +14,19 @@ export const metadata: Metadata = {
 
 async function getCategoriesTree(): Promise<Category[]> {
   try {
-    const response = await fetch(`${process.env.APP_URL}/api/categories/tree`, {
-      next: {
-        revalidate: 3600, // Revalidate every hour
-        tags: ['categories']
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch categories');
-    }
-
-    const data = await response.json();
-    return data.categories || [];
+    await connectDB();
+    const categories = await CategoryModel.find({ parentId: null })
+      .sort({ order: 1, name: 1 })
+      .populate({
+        path: 'subCategories',
+        options: { sort: { order: 1, name: 1 } },
+        populate: {
+          path: 'subCategories',
+          options: { sort: { order: 1, name: 1 } }
+        }
+      })
+      .lean();
+    return categories as unknown as Category[];
   } catch (error) {
     console.error('Error fetching top categories:', error);
     return [];

@@ -200,8 +200,9 @@ export function BannerSlider() {
           >
             {/* Background Image with Parallax Effect */}
             <div
-              className="duration-[10000ms] absolute inset-0 scale-[1.02] transition-transform ease-linear"
+              className="absolute inset-0 scale-[1.02] transition-transform ease-linear"
               style={{
+                transitionDuration: '10000ms',
                 transform:
                   index === currentBanner ? 'scale(1.08)' : 'scale(1.02)',
                 transitionDelay: index === currentBanner ? '0ms' : '0ms'

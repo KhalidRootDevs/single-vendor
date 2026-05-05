@@ -1,26 +1,22 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
+import connectDB from '@/lib/database';
+import { Category as CategoryModel } from '@/models/Category';
 import { Category } from '@/types';
 
 async function getFeaturedCategories(): Promise<Category[]> {
   try {
-    const response = await fetch(
-      `${process.env.APP_URL}/api/categories?featured=true&active=true&parentId=null&includeSubCategories=true&limit=8`,
-      {
-        next: {
-          revalidate: 3600, // Revalidate every hour
-          tags: ['categories']
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch categories');
-    }
-
-    const data = await response.json();
-    return data.categories || [];
+    await connectDB();
+    const categories = await CategoryModel.find({
+      featured: true,
+      active: true,
+      parentId: null
+    })
+      .sort({ order: 1, name: 1 })
+      .limit(8)
+      .lean();
+    return categories as unknown as Category[];
   } catch (error) {
     console.error('Error fetching featured categories:', error);
     return [];
@@ -30,7 +26,7 @@ async function getFeaturedCategories(): Promise<Category[]> {
 export async function TopCategories() {
   const categories = await getFeaturedCategories();
 
-  // Fallback to default categories if API fails or returns empty
+  // Fallback to default categories if DB fails or returns empty
   const displayCategories =
     categories.length > 0
       ? categories

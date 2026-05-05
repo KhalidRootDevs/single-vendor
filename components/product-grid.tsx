@@ -1,26 +1,40 @@
 import { Product, ProductCardData } from '@/types';
 import { ProductCard } from '@/components/product-card';
+import connectDB from '@/lib/database';
+import { Product as ProductModel } from '@/models/Product';
 
-async function getProducts(
-  type: 'featured' | 'best-selling' | 'top-rated' | 'new-arrivals'
-): Promise<Product[]> {
+type GridType = 'featured' | 'best-selling' | 'top-rated' | 'new-arrivals';
+
+async function getProducts(type: GridType): Promise<Product[]> {
   try {
-    const response = await fetch(
-      `${process.env.APP_URL}/api/products?type=${type}&limit=8`,
-      {
-        next: {
-          revalidate: 3600,
-          tags: ['products']
-        }
-      }
-    );
+    await connectDB();
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch products');
+    const query: Record<string, unknown> = { active: true };
+    let sortOptions: Record<string, 1 | -1> = { featured: -1, createdAt: -1 };
+
+    switch (type) {
+      case 'featured':
+        query.featured = true;
+        sortOptions = { featured: -1, createdAt: -1 };
+        break;
+      case 'best-selling':
+        sortOptions = { salesCount: -1 };
+        break;
+      case 'top-rated':
+        sortOptions = { rating: -1 };
+        break;
+      case 'new-arrivals':
+        sortOptions = { createdAt: -1 };
+        break;
     }
 
-    const data = await response.json();
-    return data.products || [];
+    const products = await ProductModel.find(query)
+      .sort(sortOptions)
+      .limit(8)
+      .populate('categoryId', 'name slug')
+      .lean();
+
+    return products as unknown as Product[];
   } catch (error) {
     console.error(`Error fetching ${type} products:`, error);
     return [];
@@ -249,11 +263,7 @@ function toCardData(product: Product): ProductCardData {
   };
 }
 
-export async function ProductGrid({
-  type
-}: {
-  type: 'featured' | 'best-selling' | 'top-rated' | 'new-arrivals';
-}) {
+export async function ProductGrid({ type }: { type: GridType }) {
   const products = await getProducts(type);
 
   const displayProducts: ProductCardData[] =
