@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { User } from '@/models/User';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
+import { escapeRegex } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,12 +26,12 @@ export async function GET(request: NextRequest) {
     // Build query
     const query: any = {};
 
-    // Search filter
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } }
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { email: { $regex: safeSearch, $options: 'i' } },
+        { phone: { $regex: safeSearch, $options: 'i' } }
       ];
     }
 

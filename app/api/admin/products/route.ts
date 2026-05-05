@@ -4,6 +4,17 @@ import { verifyToken } from '@/lib/auth';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import connectDB from '@/lib/database';
 import mongoose from 'mongoose';
+import { escapeRegex } from '@/lib/utils';
+
+const ALLOWED_PRODUCT_SORT_FIELDS = [
+  'createdAt',
+  'name',
+  'price',
+  'stock',
+  'salesCount',
+  'rating',
+  'featured'
+];
 
 /**
  * POST /api/products
@@ -236,15 +247,15 @@ export async function GET(request: NextRequest) {
 
     const query: any = {};
 
-    // Search filter
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { sku: { $regex: search, $options: 'i' } },
-        { tags: { $in: [new RegExp(search, 'i')] } },
-        { 'variants.attributes.color': { $regex: search, $options: 'i' } },
-        { 'variants.attributes.size': { $regex: search, $options: 'i' } }
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } },
+        { sku: { $regex: safeSearch, $options: 'i' } },
+        { tags: { $in: [new RegExp(safeSearch, 'i')] } },
+        { 'variants.attributes.color': { $regex: safeSearch, $options: 'i' } },
+        { 'variants.attributes.size': { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
@@ -311,7 +322,12 @@ export async function GET(request: NextRequest) {
     }
 
     const skip = (page - 1) * limit;
-    const sort: any = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+    const safeSortBy = ALLOWED_PRODUCT_SORT_FIELDS.includes(sortBy)
+      ? sortBy
+      : 'createdAt';
+    const sort: Record<string, 1 | -1> = {
+      [safeSortBy]: sortOrder === 'desc' ? -1 : 1
+    };
 
     const products = await Product.find(query)
       .populate('categoryId', 'name slug')

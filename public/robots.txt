@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /account/
+
+Sitemap: NEXT_PUBLIC_BASE_URL/sitemap.xml

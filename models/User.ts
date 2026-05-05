@@ -1,23 +1,11 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
+import type { OrderStatus, PaymentStatus, PaymentMethod } from '@/types';
 
-// Define the role types
 export type UserRole = 'user' | 'admin' | 'moderator' | 'support';
 export type UserStatus = 'active' | 'inactive' | 'suspended' | 'pending';
-export type OrderStatus =
-  | 'pending'
-  | 'processing'
-  | 'shipped'
-  | 'delivered'
-  | 'cancelled'
-  | 'refunded';
-export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
-export type PaymentMethod =
-  | 'credit_card'
-  | 'debit_card'
-  | 'paypal'
-  | 'bank_transfer'
-  | 'cash_on_delivery';
+
+export type { OrderStatus, PaymentStatus, PaymentMethod };
 
 export interface IOrderReference {
   orderId: mongoose.Types.ObjectId;
@@ -67,7 +55,11 @@ export interface IUser extends Document {
   lastLogin?: Date;
   emailVerified: boolean;
   phoneVerified: boolean;
-  guestAccount: boolean; // New field for guest accounts
+  guestAccount: boolean;
+  emailVerificationToken?: string;
+  emailVerificationExpiry?: Date;
+  passwordResetToken?: string;
+  passwordResetExpiry?: Date;
   preferences: {
     newsletter: boolean;
     marketing: boolean;
@@ -238,8 +230,7 @@ const userSchema = new Schema<IUser>(
     },
     googleId: {
       type: String,
-      trim: true,
-      sparse: true
+      trim: true
     },
     phone: {
       type: String,
@@ -286,6 +277,22 @@ const userSchema = new Schema<IUser>(
     guestAccount: {
       type: Boolean,
       default: false
+    },
+    emailVerificationToken: {
+      type: String,
+      select: false
+    },
+    emailVerificationExpiry: {
+      type: Date,
+      select: false
+    },
+    passwordResetToken: {
+      type: String,
+      select: false
+    },
+    passwordResetExpiry: {
+      type: Date,
+      select: false
     },
     preferences: {
       newsletter: {
@@ -479,15 +486,11 @@ userSchema.statics.convertGuestToRegular = async function (
   );
 };
 
-// Index for efficient queries
-userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ status: 1 });
 userSchema.index({ role: 1 });
-userSchema.index({ guestAccount: 1 });
-userSchema.index({ 'orders.date': -1 });
 userSchema.index({ createdAt: -1 });
-userSchema.index({ 'addresses.isDefault': 1 });
+userSchema.index({ createdAt: -1, guestAccount: 1 });
 
 export const User: Model<IUser> =
   mongoose.models.User || mongoose.model<IUser>('User', userSchema);

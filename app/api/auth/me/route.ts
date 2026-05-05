@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
           email: user.email,
           role: user?.role,
           phone: user?.phone,
-          dateOfBirth: user?.dateOfBirth
+          dateOfBirth: user?.dateOfBirth,
+          emailVerified: user.emailVerified
         }
       });
     } catch (error) {

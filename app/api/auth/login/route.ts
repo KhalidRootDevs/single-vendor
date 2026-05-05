@@ -36,6 +36,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Update lastLogin
+    await user.updateOne({ lastLogin: new Date() });
+
     // Generate token
     const token = generateToken(user);
 

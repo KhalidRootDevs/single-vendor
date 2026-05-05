@@ -46,9 +46,7 @@ const variantSchema = new Schema<IVariant>(
   {
     sku: {
       type: String,
-      trim: true,
-      unique: true,
-      sparse: true
+      trim: true
     },
     attributes: {
       type: Schema.Types.Mixed, // stores JSON object like { color: "Red", size: "M" }
@@ -205,22 +203,21 @@ const productSchema = new Schema<IProduct>(
 // Auto-generate SKU if missing
 productSchema.pre<IProduct>('save', function (next) {
   if (!this.sku) {
-    this.sku = `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    this.sku = `SKU-${Date.now()}-${Math.random()
+      .toString(36)
+      .substring(2, 6)}`;
   }
 
   this.variants.forEach((variant) => {
     if (!variant.sku) {
-      variant.sku = `${this.sku}-${Math.random().toString(36).substr(2, 5)}`;
+      variant.sku = `${this.sku}-${Math.random().toString(36).substring(2, 5)}`;
     }
   });
 
   next();
 });
 
-// Equality / cardinality indexes
 productSchema.index({ categoryId: 1, active: 1 });
-productSchema.index({ barcode: 1 });
-productSchema.index({ brand: 1, active: 1 });
 
 // Compound indexes that cover the most common query + sort patterns.
 // Each leads with `active` because every public query filters on it.

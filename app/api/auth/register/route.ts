@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-
+import crypto from 'crypto';
 import { User } from '@/models/User';
 import { generateToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
+import { sendVerificationEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,11 +29,30 @@ export async function POST(request: NextRequest) {
     }
 
     // Create user
+    const rawVerifToken = crypto.randomBytes(32).toString('hex');
+    const hashedVerifToken = crypto
+      .createHash('sha256')
+      .update(rawVerifToken)
+      .digest('hex');
+
     const user = await User.create({
       name,
       email,
-      password
+      password,
+      emailVerificationToken: hashedVerifToken,
+      emailVerificationExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000)
     });
+
+    if (process.env.NODE_ENV !== 'production') {
+      const verifUrl = `${
+        process.env.APP_URL || 'http://localhost:3000'
+      }/verify-email?token=${rawVerifToken}`;
+      console.log(
+        `[DEV] Email verification URL for ${user.email}: ${verifUrl}`
+      );
+    }
+    // Send verification email (non-blocking)
+    sendVerificationEmail(user.email, user.name, rawVerifToken).catch(() => {});
 
     // Generate token
     const token = generateToken(user);

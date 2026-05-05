@@ -219,6 +219,24 @@ export default function ProfilePage() {
     (field: keyof ProfileForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
       setFormData((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendDone, setResendDone] = useState(false);
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    try {
+      await fetch('/api/auth/send-verification', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      setResendDone(true);
+    } catch {
+      // noop
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -229,6 +247,25 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
+      {!user.emailVerified && (
+        <div className="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span className="flex-1">
+            {resendDone
+              ? 'Verification email sent — check your inbox.'
+              : 'Your email address is not verified.'}
+          </span>
+          {!resendDone && (
+            <button
+              onClick={handleResendVerification}
+              disabled={resendLoading}
+              className="shrink-0 font-medium underline underline-offset-4 hover:opacity-70 disabled:opacity-50"
+            >
+              {resendLoading ? 'Sending…' : 'Resend email'}
+            </button>
+          )}
+        </div>
+      )}
       {/* Profile information */}
       <Card>
         <CardHeader>

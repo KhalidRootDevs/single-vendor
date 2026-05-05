@@ -5,9 +5,12 @@ import {
   useContext,
   useState,
   useEffect,
+  useCallback,
   type ReactNode
 } from 'react';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import { UNAUTHORIZED_EVENT } from '@/lib/api-fetch';
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   google_cancelled: 'Google sign-in was cancelled.',
@@ -23,6 +26,7 @@ interface User {
   role: 'user' | 'admin' | 'moderator' | 'support';
   phone?: string;
   dateOfBirth?: Date;
+  emailVerified?: boolean;
 }
 
 interface AuthContextType {
@@ -40,6 +44,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   // Check authentication status on mount
   const checkAuth = async () => {
@@ -133,25 +138,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // Logout function
-  const logout = async (): Promise<void> => {
+  const logout = useCallback(async (): Promise<void> => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/auth/logout', {
+      await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });
-
-      if (response.ok) {
-        setUser(null);
-      } else {
-        console.error('Logout failed');
-      }
+      setUser(null);
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Check auth on mount and handle Google OAuth redirect results
   useEffect(() => {
@@ -171,6 +171,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     checkAuth();
   }, []);
+
+  // Global 401 handler — any API call that gets 401 triggers logout + redirect home
+  useEffect(() => {
+    const handleUnauthorized = async () => {
+      await logout();
+      router.push('/');
+    };
+
+    window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () =>
+      window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, [logout, router]);
 
   const value: AuthContextType = {
     user,

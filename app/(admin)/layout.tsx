@@ -7,6 +7,7 @@ import type React from 'react';
 import AdminHeader from '@/components/layout/admin/header';
 import AdminSidebar from '@/components/layout/admin/sidebar';
 import { useAuth } from '@/context/auth-context';
+import { UNAUTHORIZED_EVENT } from '@/lib/api-fetch';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
@@ -20,6 +21,22 @@ export default function AdminLayout({
   const hasCheckedAuth = useRef(false);
   const isRedirectingRef = useRef(false);
 
+  // Intercept all fetch calls in the admin panel.
+  // Any 401 response dispatches UNAUTHORIZED_EVENT → auth-context handles logout + redirect.
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 401) {
+        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+      }
+      return response;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
   // Check if user has admin role
   const isAdmin =
     user?.role === 'admin' ||
@@ -31,7 +48,7 @@ export default function AdminLayout({
     // If loading is complete and we haven't checked auth yet
     if (!isLoading && !hasCheckedAuth.current) {
       hasCheckedAuth.current = true;
-      
+
       // If no user is logged in, redirect to home
       if (!user) {
         isRedirectingRef.current = true;

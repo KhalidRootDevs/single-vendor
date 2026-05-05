@@ -7,6 +7,16 @@ import { User } from '@/models/User';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
+import { escapeRegex } from '@/lib/utils';
+
+const ALLOWED_ORDER_SORT_FIELDS = [
+  'createdAt',
+  'total',
+  'status',
+  'orderNumber',
+  'paymentStatus',
+  'date'
+];
 
 const TAX_RATE = 0.08;
 
@@ -341,18 +351,23 @@ export async function GET(request: NextRequest) {
       query.paymentStatus = paymentStatus;
     }
 
-    // Search filter
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { orderNumber: { $regex: search, $options: 'i' } },
-        { 'customer.name': { $regex: search, $options: 'i' } },
-        { 'customer.email': { $regex: search, $options: 'i' } },
-        { trackingNumber: { $regex: search, $options: 'i' } }
+        { orderNumber: { $regex: safeSearch, $options: 'i' } },
+        { 'customer.name': { $regex: safeSearch, $options: 'i' } },
+        { 'customer.email': { $regex: safeSearch, $options: 'i' } },
+        { trackingNumber: { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
     const skip = (page - 1) * limit;
-    const sort: any = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+    const safeSortBy = ALLOWED_ORDER_SORT_FIELDS.includes(sortBy)
+      ? sortBy
+      : 'createdAt';
+    const sort: Record<string, 1 | -1> = {
+      [safeSortBy]: sortOrder === 'desc' ? -1 : 1
+    };
 
     const orders = await Order.find(query)
       .populate('customer.id', 'name email')

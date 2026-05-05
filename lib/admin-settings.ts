@@ -41,8 +41,6 @@ export async function getStripeConfigAdmin() {
     const creditCardsEnabled =
       settings.payment?.paymentMethods?.creditCards || false;
 
-    console.log('Stripe Secret', stripeConfig);
-
     return {
       publishableKey: stripeConfig?.publishableKey || null,
       secretKey: stripeConfig?.secretKey || null,

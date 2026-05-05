@@ -1,8 +1,19 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getStripeConfigAdmin } from '@/lib/admin-settings';
+import { verifyToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+  try {
+    verifyToken(token);
+  } catch {
+    return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { amount, currency = 'usd', metadata = {} } = body;

@@ -1,7 +1,28 @@
 import { clearDatabase, seedDynamic } from '@/lib/seed/dynamic-seeder';
+import { verifyToken } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Forbidden in production' },
+      { status: 403 }
+    );
+  }
+
+  const token = request.cookies.get('token')?.value;
+  if (!token) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+  try {
+    const decoded = verifyToken(token);
+    if (decoded.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+  }
+
   try {
     const {
       action,

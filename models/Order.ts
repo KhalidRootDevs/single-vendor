@@ -1,19 +1,7 @@
 import mongoose, { type Document, type Model, Schema } from 'mongoose';
+import type { OrderStatus, PaymentStatus, PaymentMethod } from '@/types';
 
-export type OrderStatus =
-  | 'pending'
-  | 'processing'
-  | 'shipped'
-  | 'delivered'
-  | 'cancelled'
-  | 'refunded';
-export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
-export type PaymentMethod =
-  | 'credit_card'
-  | 'debit_card'
-  | 'paypal'
-  | 'bank_transfer'
-  | 'cash_on_delivery';
+export type { OrderStatus, PaymentStatus, PaymentMethod };
 
 export interface ICustomer {
   id: mongoose.Types.ObjectId;
@@ -510,21 +498,16 @@ orderSchema.virtual('itemCount').get(function () {
   return this.items.reduce((total, item) => total + item.quantity, 0);
 });
 
-// Index definitions - only define once here
-orderSchema.index({ 'customer.id': 1 });
 orderSchema.index({ 'customer.email': 1 });
-orderSchema.index({ status: 1 });
-orderSchema.index({ paymentStatus: 1 });
-orderSchema.index({ date: -1 });
-orderSchema.index({ 'timeline.date': -1 });
-orderSchema.index({ trackingNumber: 1 });
+orderSchema.index({ trackingNumber: 1 }, { sparse: true });
 orderSchema.index({ createdAt: -1 });
-orderSchema.index({ updatedAt: -1 });
-
-// Compound indexes for common queries
 orderSchema.index({ 'customer.id': 1, createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ paymentStatus: 1, createdAt: -1 });
+// Dashboard aggregation indexes
+orderSchema.index({ createdAt: -1, total: 1 });
+orderSchema.index({ createdAt: -1, 'items.productId': 1 });
+orderSchema.index({ createdAt: -1, status: 1, total: 1 });
 
 export const Order: Model<IOrder> =
   mongoose.models.Order || mongoose.model<IOrder>('Order', orderSchema);

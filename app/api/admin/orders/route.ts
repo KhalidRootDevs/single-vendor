@@ -1,7 +1,16 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { Order } from '@/models/Order';
-import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
+import { escapeRegex } from '@/lib/utils';
+
+const ALLOWED_ORDER_SORT_FIELDS = [
+  'createdAt',
+  'total',
+  'status',
+  'orderNumber',
+  'paymentStatus',
+  'date'
+];
 
 /**
  * GET /api/admin/orders
@@ -50,20 +59,25 @@ export async function GET(request: NextRequest) {
       if (maxTotal) query.total.$lte = Number.parseFloat(maxTotal);
     }
 
-    // Search filter
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { orderNumber: { $regex: search, $options: 'i' } },
-        { 'customer.name': { $regex: search, $options: 'i' } },
-        { 'customer.email': { $regex: search, $options: 'i' } },
-        { 'customer.phone': { $regex: search, $options: 'i' } },
-        { trackingNumber: { $regex: search, $options: 'i' } },
-        { 'shippingAddress.fullName': { $regex: search, $options: 'i' } }
+        { orderNumber: { $regex: safeSearch, $options: 'i' } },
+        { 'customer.name': { $regex: safeSearch, $options: 'i' } },
+        { 'customer.email': { $regex: safeSearch, $options: 'i' } },
+        { 'customer.phone': { $regex: safeSearch, $options: 'i' } },
+        { trackingNumber: { $regex: safeSearch, $options: 'i' } },
+        { 'shippingAddress.fullName': { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
     const skip = (page - 1) * limit;
-    const sort: any = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
+    const safeSortBy = ALLOWED_ORDER_SORT_FIELDS.includes(sortBy)
+      ? sortBy
+      : 'createdAt';
+    const sort: Record<string, 1 | -1> = {
+      [safeSortBy]: sortOrder === 'desc' ? -1 : 1
+    };
 
     // Get orders with proper population
     const orders = await Order.find(query)
