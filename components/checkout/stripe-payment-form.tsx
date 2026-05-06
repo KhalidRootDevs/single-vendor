@@ -6,10 +6,8 @@ import {
   useStripe,
   useElements
 } from '@stripe/react-stripe-js';
-
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, CreditCard } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
 interface StripePaymentFormProps {
@@ -21,7 +19,7 @@ interface StripePaymentFormProps {
 }
 
 export function StripePaymentForm({
-  clientSecret,
+  clientSecret: _clientSecret,
   onSuccess,
   onError,
   isProcessing,
@@ -30,6 +28,7 @@ export function StripePaymentForm({
   const stripe = useStripe();
   const elements = useElements();
 
+  // ── All Stripe payment logic UNCHANGED ────────────────────────────────────
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -80,36 +79,29 @@ export function StripePaymentForm({
     }
   };
 
+  // ── UI only (no Card wrapper — Dialog in checkout page provides container) ─
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CreditCard className="h-5 w-5" />
-          Payment Details
-        </CardTitle>
-      </CardHeader>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <PaymentElement options={{ layout: 'tabs' }} />
 
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <PaymentElement options={{ layout: 'tabs' }} />
-
-          <Button
-            type="submit"
-            disabled={!stripe || !elements || isProcessing}
-            className="w-full"
-            size="lg"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing Payment...
-              </>
-            ) : (
-              'Complete Payment'
-            )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+      <Button
+        type="submit"
+        disabled={!stripe || !elements || isProcessing}
+        className="w-full gap-2 rounded-xl py-5 text-sm font-semibold"
+        size="lg"
+      >
+        {isProcessing ? (
+          <>
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            Processing…
+          </>
+        ) : (
+          <>
+            <Lock className="h-4 w-4" />
+            Pay Now
+          </>
+        )}
+      </Button>
+    </form>
   );
 }

@@ -3,14 +3,28 @@
 import { useCart } from '@/context/cart-context';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
-
-import { CheckCircle2, AlertCircle, CreditCard, Plus, X } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog';
+import {
+  AlertCircle,
+  ArrowRight,
+  Banknote,
+  CheckCircle2,
+  CreditCard,
+  Lock,
+  Plus,
+  Truck
+} from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -21,31 +35,24 @@ import { Container } from '@/components/ui/container';
 import { Elements } from '@stripe/react-stripe-js';
 import { getStripe } from '@/lib/stripe';
 import { StripePaymentForm } from '@/components/checkout/stripe-payment-form';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Address } from '@/types';
 import { CheckoutFormValues, checkoutSchema } from '@/lib/validations/index';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
+import { cn } from '@/lib/utils';
 
-// Shipping method options
+// ── Shipping options ──────────────────────────────────────────────────────────
 const shippingMethods = [
   {
     id: 'standard',
     name: 'Standard Shipping',
     price: 5.99,
-    days: '5-7 business days'
+    days: '5–7 business days'
   },
   {
     id: 'express',
     name: 'Express Shipping',
     price: 12.99,
-    days: '2-3 business days'
+    days: '2–3 business days'
   },
   {
     id: 'overnight',
@@ -55,9 +62,110 @@ const shippingMethods = [
   }
 ];
 
+// ── Tiny layout helpers ───────────────────────────────────────────────────────
+function SectionCard({
+  children,
+  className
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-2xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900',
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({ step, title }: { step: number; title: string }) {
+  return (
+    <div className="mb-5 flex items-center gap-3">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-[11px] font-bold text-white dark:bg-white dark:text-neutral-900">
+        {step}
+      </span>
+      <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+        {title}
+      </h2>
+    </div>
+  );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="mt-1.5 flex items-center gap-1 text-xs text-red-500">
+      <AlertCircle className="h-3 w-3 shrink-0" />
+      {message}
+    </p>
+  );
+}
+
+// ── Checkout progress bar ─────────────────────────────────────────────────────
+const STEPS = ['Cart', 'Details', 'Payment', 'Confirmed'];
+
+function CheckoutProgress({ active }: { active: number }) {
+  return (
+    <nav aria-label="Checkout progress" className="mb-8">
+      <ol className="flex items-center justify-center gap-0">
+        {STEPS.map((label, i) => {
+          const done = i < active;
+          const current = i === active;
+          return (
+            <li key={label} className="flex items-center">
+              <div className="flex flex-col items-center gap-1">
+                <span
+                  className={cn(
+                    'flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold transition-colors',
+                    done
+                      ? 'bg-emerald-500 text-white'
+                      : current
+                      ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
+                      : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800'
+                  )}
+                >
+                  {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+                </span>
+                <span
+                  className={cn(
+                    'text-[10px] font-medium uppercase tracking-wider',
+                    current
+                      ? 'text-neutral-900 dark:text-neutral-100'
+                      : 'text-neutral-400'
+                  )}
+                >
+                  {label}
+                </span>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div
+                  className={cn(
+                    'mx-2 mb-5 h-px w-12 transition-colors sm:w-20',
+                    done
+                      ? 'bg-emerald-400'
+                      : 'bg-neutral-200 dark:bg-neutral-700'
+                  )}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function CheckoutPage() {
   const { items, subtotal, tax, clearCart } = useCart();
   const { user } = useAuth();
+  const router = useRouter();
+
+  // ── State (ALL UNCHANGED) ──────────────────────────────────────────────────
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [orderId, setOrderId] = useState('');
@@ -67,32 +175,50 @@ export default function CheckoutPage() {
   const [stripeConfigured, setStripeConfigured] = useState(false);
   const [checkingStripe, setCheckingStripe] = useState(true);
   const [sameAsShipping, setSameAsShipping] = useState(true);
-  const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
-
-  // New state for payment modal
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
   const [creatingPaymentIntent, setCreatingPaymentIntent] = useState(false);
-
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [useNewAddress, setUseNewAddress] = useState(false);
-  const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [, setLoadingAddresses] = useState(false);
 
+  // UI-only: countdown for post-order redirect
+  const [redirectCountdown, setRedirectCountdown] = useState(3);
+
+  // ── Effects ───────────────────────────────────────────────────────────────
   useEffect(() => {
     setIsMounted(true);
     checkStripeConfiguration();
-
     if (items.length === 0) {
       router.push('/cart');
     }
-
     if (user) {
       fetchSavedAddresses();
     }
   }, [items.length, router, user]);
 
+  // Auto-redirect to order detail page after successful order.
+  // orderId = orderNumber returned by POST /api/orders (e.g. "ORD-20260506-YBJN67")
+  useEffect(() => {
+    if (!orderComplete || !orderId) return;
+
+    const redirect = setTimeout(() => {
+      router.push(`/account/orders/${orderId}`);
+    }, 3000);
+
+    const tick = setInterval(() => {
+      setRedirectCountdown((c) => Math.max(0, c - 1));
+    }, 1000);
+
+    return () => {
+      clearTimeout(redirect);
+      clearInterval(tick);
+    };
+  }, [orderComplete, orderId, router]);
+
+  // ── Business logic (ALL UNCHANGED) ───────────────────────────────────────
   const fetchSavedAddresses = async () => {
     try {
       setLoadingAddresses(true);
@@ -100,8 +226,6 @@ export default function CheckoutPage() {
       if (response.ok) {
         const data = await response.json();
         setSavedAddresses(data.addresses || []);
-
-        // Auto-select default address if available
         const defaultAddress = data.addresses?.find(
           (addr: Address) => addr.isDefault
         );
@@ -131,7 +255,6 @@ export default function CheckoutPage() {
     if (addressId === 'new') {
       setUseNewAddress(true);
       setSelectedAddressId('');
-      // Clear form fields
       setValue('shippingAddress.fullName', '');
       setValue('shippingAddress.address', '');
       setValue('shippingAddress.city', '');
@@ -157,7 +280,6 @@ export default function CheckoutPage() {
       const stripe = await getStripe();
       setStripePromise(Promise.resolve(stripe));
       setStripeConfigured(!!stripe);
-
       if (!stripe) {
         setStripeError(
           'Credit card payments are currently unavailable. Please use an alternative payment method.'
@@ -179,16 +301,12 @@ export default function CheckoutPage() {
     setValue,
     getValues,
     trigger,
-    formState: { errors, isValid }
+    formState: { errors }
   } = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
     mode: 'onChange',
     defaultValues: {
-      contactInfo: {
-        fullName: '',
-        email: '',
-        phone: ''
-      },
+      contactInfo: { fullName: '', email: '', phone: '' },
       shippingAddress: {
         fullName: '',
         address: '',
@@ -212,7 +330,6 @@ export default function CheckoutPage() {
     }
   });
 
-  // Watch form values
   const paymentMethod = watch('paymentMethod');
   const shippingMethod = watch('shippingMethod');
   const shippingAddress = watch('shippingAddress');
@@ -238,10 +355,8 @@ export default function CheckoutPage() {
     try {
       setCreatingPaymentIntent(true);
       setStripeError('');
-
       if (!orderTotal || orderTotal <= 0)
         throw new Error('Invalid order total');
-
       const response = await fetch('/api/create-payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -256,11 +371,9 @@ export default function CheckoutPage() {
           }
         })
       });
-
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error || 'Failed to create intent');
-
       if (data.clientSecret) {
         setClientSecret(data.clientSecret);
         setPaymentIntentId(data.paymentIntentId || '');
@@ -271,9 +384,7 @@ export default function CheckoutPage() {
       const msg =
         error.message || 'Unable to initialize payment. Please try again.';
       setStripeError(msg);
-
       toast.error('Payment setup failed');
-
       return false;
     } finally {
       setCreatingPaymentIntent(false);
@@ -281,27 +392,16 @@ export default function CheckoutPage() {
   };
 
   const handlePlaceOrder = async () => {
-    // Trigger validation for all fields
     const isValid = await trigger();
-
     if (!isValid) {
-      toast.error(
-        'Validation error! Please fill in all required fields correctly.'
-      );
-
+      toast.error('Please fill in all required fields correctly.');
       return;
     }
-
     if (items.length === 0) {
-      toast.error(
-        'Cart is empty! Please add items to your cart before checking out.'
-      );
-
+      toast.error('Your cart is empty.');
       return;
     }
-
     const currentPaymentMethod = getValues('paymentMethod');
-
     if (
       currentPaymentMethod === 'credit_card' ||
       currentPaymentMethod === 'debit_card'
@@ -310,30 +410,20 @@ export default function CheckoutPage() {
         setStripeError(
           'Payment system unavailable. Please select another payment method.'
         );
-
-        toast.error(
-          'Payment unavailable! Please choose another payment option.'
-        );
-
+        toast.error('Please choose another payment option.');
         return;
       }
-
-      // Create payment intent and show modal
       const intentCreated = await createPaymentIntent();
       if (intentCreated) {
         setShowPaymentModal(true);
       }
     } else {
-      // For non-card payments, process directly
       const formData = getValues();
       await processOrder(formData);
     }
   };
 
-  const onSubmit = async (data: CheckoutFormValues) => {
-    // This function is now handled by handlePlaceOrder
-    // Keeping it for the form's onSubmit handler
-  };
+  const onSubmit = async (_data: CheckoutFormValues) => {};
 
   const processOrder = async (
     data: CheckoutFormValues,
@@ -341,9 +431,8 @@ export default function CheckoutPage() {
   ) => {
     setIsSubmitting(true);
     try {
-      // Map cart items to order items format
       const orderItems = items.map((item, index) => ({
-        id: index + 1, // Sequential ID for order items
+        id: index + 1,
         name: item.name,
         price: item.price,
         quantity: item.quantity,
@@ -382,7 +471,6 @@ export default function CheckoutPage() {
             country: data.billingAddress.country || ''
           };
 
-      // Determine payment status based on payment method and Stripe confirmation
       let paymentStatus: 'pending' | 'paid' | 'failed' = 'pending';
       if (data.paymentMethod === 'cash_on_delivery') {
         paymentStatus = 'pending';
@@ -390,13 +478,11 @@ export default function CheckoutPage() {
         data.paymentMethod === 'credit_card' ||
         data.paymentMethod === 'debit_card'
       ) {
-        // For card payments, only set to 'paid' if we have a successful payment intent
         paymentStatus =
           paymentIntent && paymentIntent.status === 'succeeded'
             ? 'paid'
             : 'pending';
       } else {
-        // For other payment methods, default to pending
         paymentStatus = 'pending';
       }
 
@@ -420,7 +506,7 @@ export default function CheckoutPage() {
         billingAddress: billingAddressData,
         items: orderItems,
         paymentMethod: data.paymentMethod,
-        paymentStatus: paymentStatus,
+        paymentStatus,
         paymentIntentId: paymentIntent?.id || paymentIntentId,
         shippingMethod: selectedShippingMethod.id,
         notes: data.notes,
@@ -437,24 +523,20 @@ export default function CheckoutPage() {
       });
 
       const result = await response.json();
-
       if (!response.ok)
         throw new Error(result.error || 'Failed to create order');
 
+      // orderId = orderNumber from backend (e.g. "ORD-20260506-YBJN67")
+      // useEffect above will redirect to /account/orders/${orderId}
       setOrderId(result.order.orderNumber);
       clearCart();
       setOrderComplete(true);
       setShowPaymentModal(false);
 
-      toast.success(
-        `Your order ${result.order.orderNumber} has been confirmed.`
-      );
+      toast.success(`Order ${result.order.orderNumber} confirmed!`);
     } catch (error: any) {
       console.error('❌ Error processing order:', error);
-
-      toast.error(
-        'There was an error processing your order. Please try again.'
-      );
+      toast.error('Error processing your order. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -482,695 +564,932 @@ export default function CheckoutPage() {
     setStripeError('');
   };
 
+  // ── Guards ────────────────────────────────────────────────────────────────
   if (!isMounted) return null;
-
-  if (orderComplete) {
-    return (
-      <Container className="mx-auto max-w-3xl py-12 text-center">
-        <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle2 className="h-10 w-10 text-green-600" />
-        </div>
-        <h1 className="mb-4 text-3xl font-bold">Order Confirmed!</h1>
-        <p className="mb-8 text-muted-foreground">
-          Thank you for your purchase. Your order has been received and is being
-          processed.
-        </p>
-        <div className="mb-8 rounded-lg bg-muted p-6">
-          <h2 className="mb-4 text-xl font-semibold">Order Details</h2>
-          <div className="mb-2 flex justify-between">
-            <span>Order Number:</span>
-            <span className="font-medium">{orderId}</span>
-          </div>
-          <div className="mb-2 flex justify-between">
-            <span>Date:</span>
-            <span>{new Date().toLocaleDateString()}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Total:</span>
-            <span className="font-medium">${orderTotal.toFixed(2)}</span>
-          </div>
-          {paymentIntentId && (
-            <div className="mt-2 flex justify-between">
-              <span>Payment ID:</span>
-              <span className="text-xs font-medium">{paymentIntentId}</span>
-            </div>
-          )}
-        </div>
-        <p className="mb-8">
-          We've sent a confirmation email with your order details.
-        </p>
-        <div className="flex flex-col justify-center gap-4 sm:flex-row">
-          <Button asChild>
-            <Link href="/">Continue Shopping</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/account/orders">View Orders</Link>
-          </Button>
-        </div>
-      </Container>
-    );
-  }
 
   if (items.length === 0 && isMounted) {
     router.push('/cart');
     return null;
   }
 
+  // ── Success screen ────────────────────────────────────────────────────────
+  if (orderComplete) {
+    return (
+      <Container className="flex min-h-[70vh] items-center justify-center py-16">
+        <div className="w-full max-w-md text-center">
+          {/* Animated checkmark */}
+          <div className="mb-6 inline-flex h-24 w-24 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40">
+            <CheckCircle2 className="h-12 w-12 animate-[scale-in_0.4s_ease-out] text-emerald-500" />
+          </div>
+
+          <h1 className="mb-2 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
+            Order Confirmed!
+          </h1>
+          <p className="mb-8 text-sm text-neutral-500 dark:text-neutral-400">
+            Thank you for your purchase. Your order is being processed.
+          </p>
+
+          {/* Order detail card */}
+          <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-5 text-left dark:border-neutral-800 dark:bg-neutral-900">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-neutral-400">
+              Order Summary
+            </p>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-neutral-500">Order number</span>
+                <span className="font-semibold text-neutral-900 dark:text-neutral-100">
+                  {orderId}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-neutral-500">Date</span>
+                <span className="text-neutral-900 dark:text-neutral-100">
+                  {new Date().toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-neutral-500">Total</span>
+                <span className="font-bold text-neutral-900 dark:text-neutral-100">
+                  ${orderTotal.toFixed(2)}
+                </span>
+              </div>
+              {paymentIntentId && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-500">Payment ID</span>
+                  <span className="font-mono text-[11px] text-neutral-400">
+                    {paymentIntentId.slice(0, 20)}…
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Redirect notice */}
+          <p className="mb-6 text-xs text-neutral-400">
+            Redirecting to your order in{' '}
+            <span className="font-semibold text-neutral-600 dark:text-neutral-300">
+              {redirectCountdown}s
+            </span>
+            …
+          </p>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            {/* Primary: go to order now — uses orderId from backend */}
+            <Button
+              onClick={() => router.push(`/account/orders/${orderId}`)}
+              className="gap-2"
+            >
+              View My Order
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/">Continue Shopping</Link>
+            </Button>
+          </div>
+        </div>
+      </Container>
+    );
+  }
+
+  // ── Checkout form ─────────────────────────────────────────────────────────
   return (
-    <Container>
-      <h1 className="mb-8 text-3xl font-bold">Checkout</h1>
+    <div className="min-h-screen bg-neutral-50 py-8 dark:bg-neutral-950">
+      <Container>
+        {/* Page title */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
+            Checkout
+          </h1>
+          <p className="mt-1 text-sm text-neutral-400">
+            {items.length} item{items.length !== 1 ? 's' : ''} · $
+            {subtotal.toFixed(2)}
+          </p>
+        </div>
 
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
-            {/* Contact Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Contact Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">
-                    Full Name <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="fullName"
-                    placeholder="John Doe"
-                    {...register('contactInfo.fullName')}
-                  />
-                  {errors.contactInfo?.fullName && (
-                    <p className="text-sm text-red-500">
-                      {errors.contactInfo.fullName.message}
-                    </p>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">
-                      Email Address <span className="text-red-500">*</span>
+        {/* Progress */}
+        <CheckoutProgress active={1} />
+
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
+            {/* ── Left: form sections ─────────────────────────────────── */}
+            <div className="space-y-5">
+              {/* 1 · Contact Information */}
+              <SectionCard>
+                <SectionTitle step={1} title="Contact Information" />
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fullName" className="text-sm font-medium">
+                      Full Name <span className="text-red-500">*</span>
                     </Label>
                     <Input
-                      id="email"
-                      type="email"
-                      placeholder="john.doe@example.com"
-                      {...register('contactInfo.email')}
+                      id="fullName"
+                      placeholder="John Doe"
+                      className={cn(
+                        errors.contactInfo?.fullName &&
+                          'border-red-400 focus-visible:ring-red-400'
+                      )}
+                      {...register('contactInfo.fullName')}
                     />
-                    {errors.contactInfo?.email && (
-                      <p className="text-sm text-red-500">
-                        {errors.contactInfo.email.message}
-                      </p>
-                    )}
+                    <FieldError
+                      message={errors.contactInfo?.fullName?.message}
+                    />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">
-                      Phone Number <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="phone"
-                      placeholder="+1 (123) 456-7890"
-                      {...register('contactInfo.phone')}
-                    />
-                    {errors.contactInfo?.phone && (
-                      <p className="text-sm text-red-500">
-                        {errors.contactInfo.phone.message}
-                      </p>
-                    )}
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="email" className="text-sm font-medium">
+                        Email <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="john@example.com"
+                        className={cn(
+                          errors.contactInfo?.email &&
+                            'border-red-400 focus-visible:ring-red-400'
+                        )}
+                        {...register('contactInfo.email')}
+                      />
+                      <FieldError
+                        message={errors.contactInfo?.email?.message}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="phone" className="text-sm font-medium">
+                        Phone <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="phone"
+                        placeholder="+1 (555) 000-0000"
+                        className={cn(
+                          errors.contactInfo?.phone &&
+                            'border-red-400 focus-visible:ring-red-400'
+                        )}
+                        {...register('contactInfo.phone')}
+                      />
+                      <FieldError
+                        message={errors.contactInfo?.phone?.message}
+                      />
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </SectionCard>
 
-            {/* Shipping Address */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Shipping Address</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+              {/* 2 · Shipping Address */}
+              <SectionCard>
+                <SectionTitle step={2} title="Shipping Address" />
+
+                {/* Saved addresses */}
                 {user && savedAddresses.length > 0 && (
-                  <div className="space-y-3">
-                    <Label>Select Address</Label>
+                  <div className="mb-5">
+                    <p className="mb-2.5 text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                      Saved Addresses
+                    </p>
                     <RadioGroup
                       value={useNewAddress ? 'new' : selectedAddressId}
                       onValueChange={handleAddressSelection}
                       className="space-y-2"
                     >
                       {savedAddresses.map((address) => (
-                        <div
+                        <label
                           key={address._id ?? address.label}
-                          className="flex items-start space-x-2 rounded-md border p-3"
+                          htmlFor={address._id ?? address.label}
+                          className={cn(
+                            'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-all',
+                            !useNewAddress && selectedAddressId === address._id
+                              ? 'border-primary bg-primary/5'
+                              : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700'
+                          )}
                         >
                           <RadioGroupItem
                             value={address._id ?? ''}
                             id={address._id ?? address.label}
+                            className="mt-0.5"
                           />
-                          <Label
-                            htmlFor={address._id ?? address.label}
-                            className="flex-1 cursor-pointer"
-                          >
-                            <div className="font-medium">{address.label}</div>
-                            <div className="text-sm text-muted-foreground">
+                          <div className="flex-1 text-sm">
+                            <p className="font-semibold text-neutral-900 dark:text-neutral-100">
+                              {address.label}
+                            </p>
+                            <p className="text-neutral-500">
                               {address.fullName}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
+                            </p>
+                            <p className="text-neutral-400">
                               {address.address}, {address.city}, {address.state}{' '}
                               {address.zipCode}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {address.phone}
-                            </div>
-                          </Label>
-                        </div>
+                            </p>
+                            {address.phone && (
+                              <p className="text-neutral-400">
+                                {address.phone}
+                              </p>
+                            )}
+                          </div>
+                          {address.isDefault && (
+                            <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-bold uppercase text-white dark:bg-white dark:text-neutral-900">
+                              Default
+                            </span>
+                          )}
+                        </label>
                       ))}
-                      <div className="flex items-center space-x-2 rounded-md border border-dashed p-3">
+
+                      <label
+                        htmlFor="new"
+                        className={cn(
+                          'flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed p-4 transition-all',
+                          useNewAddress
+                            ? 'border-primary bg-primary/5'
+                            : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700'
+                        )}
+                      >
                         <RadioGroupItem value="new" id="new" />
-                        <Label
-                          htmlFor="new"
-                          className="flex flex-1 cursor-pointer items-center"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          <Plus className="h-4 w-4" />
                           Use a new address
-                        </Label>
-                      </div>
+                        </span>
+                      </label>
                     </RadioGroup>
-                    <Separator className="my-4" />
+
+                    <Separator className="my-5" />
                   </div>
                 )}
 
+                {/* Address form fields */}
                 {(!user || useNewAddress || savedAddresses.length === 0) && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="shippingFullName">
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="shippingFullName"
+                        className="text-sm font-medium"
+                      >
                         Full Name <span className="text-red-500">*</span>
                       </Label>
                       <Input
                         id="shippingFullName"
                         placeholder="John Doe"
+                        className={cn(
+                          errors.shippingAddress?.fullName &&
+                            'border-red-400 focus-visible:ring-red-400'
+                        )}
                         {...register('shippingAddress.fullName')}
                       />
-                      {errors.shippingAddress?.fullName && (
-                        <p className="text-sm text-red-500">
-                          {errors.shippingAddress.fullName.message}
-                        </p>
-                      )}
+                      <FieldError
+                        message={errors.shippingAddress?.fullName?.message}
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="shippingAddress">
-                        Address <span className="text-red-500">*</span>
+
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="shippingStreet"
+                        className="text-sm font-medium"
+                      >
+                        Street Address <span className="text-red-500">*</span>
                       </Label>
                       <Textarea
-                        id="shippingAddress"
+                        id="shippingStreet"
                         placeholder="123 Main St, Apt 4B"
+                        rows={2}
+                        className={cn(
+                          'resize-none',
+                          errors.shippingAddress?.address &&
+                            'border-red-400 focus-visible:ring-red-400'
+                        )}
                         {...register('shippingAddress.address')}
                       />
-                      {errors.shippingAddress?.address && (
-                        <p className="text-sm text-red-500">
-                          {errors.shippingAddress.address.message}
-                        </p>
-                      )}
+                      <FieldError
+                        message={errors.shippingAddress?.address?.message}
+                      />
                     </div>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="shippingCity">
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="shippingCity"
+                          className="text-sm font-medium"
+                        >
                           City <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="shippingCity"
                           placeholder="New York"
+                          className={cn(
+                            errors.shippingAddress?.city &&
+                              'border-red-400 focus-visible:ring-red-400'
+                          )}
                           {...register('shippingAddress.city')}
                         />
-                        {errors.shippingAddress?.city && (
-                          <p className="text-sm text-red-500">
-                            {errors.shippingAddress.city.message}
-                          </p>
-                        )}
+                        <FieldError
+                          message={errors.shippingAddress?.city?.message}
+                        />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="shippingState">
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="shippingState"
+                          className="text-sm font-medium"
+                        >
                           State <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="shippingState"
                           placeholder="NY"
+                          className={cn(
+                            errors.shippingAddress?.state &&
+                              'border-red-400 focus-visible:ring-red-400'
+                          )}
                           {...register('shippingAddress.state')}
                         />
-                        {errors.shippingAddress?.state && (
-                          <p className="text-sm text-red-500">
-                            {errors.shippingAddress.state.message}
-                          </p>
-                        )}
+                        <FieldError
+                          message={errors.shippingAddress?.state?.message}
+                        />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="shippingZipCode">
-                          ZIP Code <span className="text-red-500">*</span>
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="shippingZip"
+                          className="text-sm font-medium"
+                        >
+                          ZIP <span className="text-red-500">*</span>
                         </Label>
                         <Input
-                          id="shippingZipCode"
+                          id="shippingZip"
                           placeholder="10001"
+                          className={cn(
+                            errors.shippingAddress?.zipCode &&
+                              'border-red-400 focus-visible:ring-red-400'
+                          )}
                           {...register('shippingAddress.zipCode')}
                         />
-                        {errors.shippingAddress?.zipCode && (
-                          <p className="text-sm text-red-500">
-                            {errors.shippingAddress.zipCode.message}
-                          </p>
-                        )}
+                        <FieldError
+                          message={errors.shippingAddress?.zipCode?.message}
+                        />
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="shippingCountry">
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="shippingCountry"
+                          className="text-sm font-medium"
+                        >
                           Country <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="shippingCountry"
                           placeholder="United States"
+                          className={cn(
+                            errors.shippingAddress?.country &&
+                              'border-red-400 focus-visible:ring-red-400'
+                          )}
                           {...register('shippingAddress.country')}
                         />
-                        {errors.shippingAddress?.country && (
-                          <p className="text-sm text-red-500">
-                            {errors.shippingAddress.country.message}
-                          </p>
-                        )}
+                        <FieldError
+                          message={errors.shippingAddress?.country?.message}
+                        />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="shippingPhone">
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="shippingPhone"
+                          className="text-sm font-medium"
+                        >
                           Phone <span className="text-red-500">*</span>
                         </Label>
                         <Input
                           id="shippingPhone"
-                          placeholder="+1 (123) 456-7890"
+                          placeholder="+1 (555) 000-0000"
+                          className={cn(
+                            errors.shippingAddress?.phone &&
+                              'border-red-400 focus-visible:ring-red-400'
+                          )}
                           {...register('shippingAddress.phone')}
                         />
-                        {errors.shippingAddress?.phone && (
-                          <p className="text-sm text-red-500">
-                            {errors.shippingAddress.phone.message}
-                          </p>
-                        )}
+                        <FieldError
+                          message={errors.shippingAddress?.phone?.message}
+                        />
                       </div>
                     </div>
-                  </>
+                  </div>
                 )}
-              </CardContent>
-            </Card>
+              </SectionCard>
 
-            {/* Billing Address */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Billing Address</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-2">
+              {/* 3 · Billing Address */}
+              <SectionCard>
+                <SectionTitle step={3} title="Billing Address" />
+
+                <label className="flex cursor-pointer items-center gap-2.5">
                   <input
                     type="checkbox"
                     id="sameAsShipping"
                     checked={sameAsShipping}
                     onChange={(e) => setSameAsShipping(e.target.checked)}
-                    className="rounded border-gray-300"
+                    className="h-4 w-4 rounded border-neutral-300 accent-neutral-900"
                   />
-                  <Label htmlFor="sameAsShipping">
+                  <span className="text-sm text-neutral-700 dark:text-neutral-300">
                     Same as shipping address
-                  </Label>
-                </div>
+                  </span>
+                </label>
 
                 {!sameAsShipping && (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="billingFullName">
-                        Full Name <span className="text-red-500">*</span>
+                  <div className="mt-5 space-y-4">
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="billingFullName"
+                        className="text-sm font-medium"
+                      >
+                        Full Name
                       </Label>
                       <Input
                         id="billingFullName"
                         placeholder="John Doe"
                         {...register('billingAddress.fullName')}
                       />
-                      {errors.billingAddress?.fullName && (
-                        <p className="text-sm text-red-500">
-                          {errors.billingAddress.fullName.message}
-                        </p>
-                      )}
+                      <FieldError
+                        message={errors.billingAddress?.fullName?.message}
+                      />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="billingAddress">
-                        Address <span className="text-red-500">*</span>
+
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="billingStreet"
+                        className="text-sm font-medium"
+                      >
+                        Street Address
                       </Label>
                       <Textarea
-                        id="billingAddress"
-                        placeholder="123 Main St, Apt 4B"
+                        id="billingStreet"
+                        placeholder="123 Main St"
+                        rows={2}
+                        className="resize-none"
                         {...register('billingAddress.address')}
                       />
-                      {errors.billingAddress?.address && (
-                        <p className="text-sm text-red-500">
-                          {errors.billingAddress.address.message}
-                        </p>
-                      )}
+                      <FieldError
+                        message={errors.billingAddress?.address?.message}
+                      />
                     </div>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="billingCity">
-                          City <span className="text-red-500">*</span>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="billingCity"
+                          className="text-sm font-medium"
+                        >
+                          City
                         </Label>
                         <Input
                           id="billingCity"
                           placeholder="New York"
                           {...register('billingAddress.city')}
                         />
-                        {errors.billingAddress?.city && (
-                          <p className="text-sm text-red-500">
-                            {errors.billingAddress.city.message}
-                          </p>
-                        )}
+                        <FieldError
+                          message={errors.billingAddress?.city?.message}
+                        />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="billingState">
-                          State <span className="text-red-500">*</span>
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="billingState"
+                          className="text-sm font-medium"
+                        >
+                          State
                         </Label>
                         <Input
                           id="billingState"
                           placeholder="NY"
                           {...register('billingAddress.state')}
                         />
-                        {errors.billingAddress?.state && (
-                          <p className="text-sm text-red-500">
-                            {errors.billingAddress.state.message}
-                          </p>
-                        )}
+                        <FieldError
+                          message={errors.billingAddress?.state?.message}
+                        />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="billingZipCode">
-                          ZIP Code <span className="text-red-500">*</span>
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="billingZip"
+                          className="text-sm font-medium"
+                        >
+                          ZIP
                         </Label>
                         <Input
-                          id="billingZipCode"
+                          id="billingZip"
                           placeholder="10001"
                           {...register('billingAddress.zipCode')}
                         />
-                        {errors.billingAddress?.zipCode && (
-                          <p className="text-sm text-red-500">
-                            {errors.billingAddress.zipCode.message}
-                          </p>
-                        )}
+                        <FieldError
+                          message={errors.billingAddress?.zipCode?.message}
+                        />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="billingCountry">
-                        Country <span className="text-red-500">*</span>
+
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="billingCountry"
+                        className="text-sm font-medium"
+                      >
+                        Country
                       </Label>
                       <Input
                         id="billingCountry"
                         placeholder="United States"
                         {...register('billingAddress.country')}
                       />
-                      {errors.billingAddress?.country && (
-                        <p className="text-sm text-red-500">
-                          {errors.billingAddress.country.message}
-                        </p>
-                      )}
+                      <FieldError
+                        message={errors.billingAddress?.country?.message}
+                      />
                     </div>
-                  </>
+                  </div>
                 )}
-              </CardContent>
-            </Card>
+              </SectionCard>
 
-            {/* Shipping Method */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Shipping Method</CardTitle>
-              </CardHeader>
-              <CardContent>
+              {/* 4 · Shipping Method */}
+              <SectionCard>
+                <SectionTitle step={4} title="Shipping Method" />
                 <RadioGroup
                   value={shippingMethod}
                   onValueChange={(value) => setValue('shippingMethod', value)}
-                  className="space-y-3"
+                  className="space-y-2"
                 >
                   {shippingMethods.map((method) => (
-                    <div
+                    <label
                       key={method.id}
-                      className="flex items-center space-x-2 rounded-md border p-4"
+                      htmlFor={method.id}
+                      className={cn(
+                        'flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition-all',
+                        shippingMethod === method.id
+                          ? 'border-primary bg-primary/5'
+                          : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700'
+                      )}
                     >
                       <RadioGroupItem value={method.id} id={method.id} />
-                      <Label
-                        htmlFor={method.id}
-                        className="flex-1 cursor-pointer"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{method.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {method.days}
-                            </p>
-                          </div>
-                          <div className="font-medium">
-                            ${method.price.toFixed(2)}
-                          </div>
-                        </div>
-                      </Label>
-                    </div>
+                      <Truck
+                        className={cn(
+                          'h-4 w-4 shrink-0',
+                          shippingMethod === method.id
+                            ? 'text-primary'
+                            : 'text-neutral-400'
+                        )}
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                          {method.name}
+                        </p>
+                        <p className="text-xs text-neutral-400">
+                          {method.days}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                        ${method.price.toFixed(2)}
+                      </span>
+                    </label>
                   ))}
                 </RadioGroup>
                 {errors.shippingMethod && (
-                  <p className="mt-2 text-sm text-red-500">
-                    {errors.shippingMethod.message}
-                  </p>
+                  <FieldError message={errors.shippingMethod.message} />
                 )}
-              </CardContent>
-            </Card>
+              </SectionCard>
 
-            {/* Payment Method */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Method</CardTitle>
-              </CardHeader>
-              <CardContent>
+              {/* 5 · Payment Method */}
+              <SectionCard>
+                <SectionTitle step={5} title="Payment Method" />
                 <RadioGroup
                   value={paymentMethod}
                   onValueChange={handlePaymentMethodChange}
-                  className="space-y-3"
+                  className="space-y-2"
                 >
-                  <div
-                    className={`flex items-center space-x-2 rounded-md border p-4 ${
-                      !stripeConfigured && !checkingStripe ? 'opacity-50' : ''
-                    }`}
+                  {/* Credit Card */}
+                  <label
+                    htmlFor="credit_card"
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition-all',
+                      paymentMethod === 'credit_card'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700',
+                      !stripeConfigured &&
+                        !checkingStripe &&
+                        'cursor-not-allowed opacity-50'
+                    )}
                   >
                     <RadioGroupItem
                       value="credit_card"
                       id="credit_card"
                       disabled={!stripeConfigured && !checkingStripe}
                     />
-                    <Label
-                      htmlFor="credit_card"
-                      className="flex-1 cursor-pointer"
-                    >
-                      <div className="flex items-center">
-                        <CreditCard className="mr-2 h-5 w-5" />
+                    <CreditCard className="h-4 w-4 shrink-0 text-neutral-500" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
                         Credit Card
                         {checkingStripe && (
-                          <span className="ml-2 text-sm text-muted-foreground">
-                            (Loading...)
+                          <span className="ml-2 text-xs text-neutral-400">
+                            Loading…
                           </span>
                         )}
                         {!stripeConfigured && !checkingStripe && (
-                          <span className="ml-2 text-sm text-red-500">
-                            (Unavailable)
+                          <span className="ml-2 text-xs text-red-400">
+                            Unavailable
                           </span>
                         )}
-                      </div>
-                    </Label>
-                    <div className="flex gap-2">
-                      <div className="flex h-6 w-10 items-center justify-center rounded bg-[#3D95CE] text-xs font-bold text-white">
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex h-5 w-9 items-center justify-center rounded bg-[#3D95CE] text-[9px] font-bold text-white">
                         VISA
-                      </div>
-                      <div className="flex h-6 w-10 items-center justify-center rounded bg-[#EB001B] text-xs font-bold text-white">
+                      </span>
+                      <span className="flex h-5 w-9 items-center justify-center rounded bg-[#EB001B] text-[9px] font-bold text-white">
                         MC
-                      </div>
-                      <div className="flex h-6 w-10 items-center justify-center rounded bg-[#006FCF] text-xs font-bold text-white">
+                      </span>
+                      <span className="flex h-5 w-9 items-center justify-center rounded bg-[#006FCF] text-[9px] font-bold text-white">
                         AMEX
-                      </div>
+                      </span>
                     </div>
-                  </div>
+                  </label>
 
-                  <div className="flex items-center space-x-2 rounded-md border p-4">
+                  {/* Debit Card */}
+                  <label
+                    htmlFor="debit_card"
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition-all',
+                      paymentMethod === 'debit_card'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700',
+                      !stripeConfigured &&
+                        !checkingStripe &&
+                        'cursor-not-allowed opacity-50'
+                    )}
+                  >
+                    <RadioGroupItem
+                      value="debit_card"
+                      id="debit_card"
+                      disabled={!stripeConfigured && !checkingStripe}
+                    />
+                    <CreditCard className="h-4 w-4 shrink-0 text-neutral-500" />
+                    <p className="flex-1 text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      Debit Card
+                    </p>
+                  </label>
+
+                  {/* PayPal */}
+                  <label
+                    htmlFor="paypal"
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition-all',
+                      paymentMethod === 'paypal'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700'
+                    )}
+                  >
                     <RadioGroupItem value="paypal" id="paypal" />
-                    <Label htmlFor="paypal" className="flex-1 cursor-pointer">
-                      PayPal
-                    </Label>
-                    <div className="flex h-6 w-16 items-center justify-center rounded bg-[#0070BA] text-xs font-bold text-white">
-                      PayPal
+                    <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#0070BA]">
+                      <span className="text-[8px] font-black text-white">
+                        P
+                      </span>
                     </div>
-                  </div>
+                    <p className="flex-1 text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      PayPal
+                    </p>
+                    <span className="flex h-5 w-14 items-center justify-center rounded bg-[#0070BA] text-[9px] font-bold text-white">
+                      PayPal
+                    </span>
+                  </label>
 
-                  <div className="flex items-center space-x-2 rounded-md border p-4">
+                  {/* Cash on Delivery */}
+                  <label
+                    htmlFor="cash_on_delivery"
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition-all',
+                      paymentMethod === 'cash_on_delivery'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700'
+                    )}
+                  >
                     <RadioGroupItem
                       value="cash_on_delivery"
                       id="cash_on_delivery"
                     />
-                    <Label
-                      htmlFor="cash_on_delivery"
-                      className="flex-1 cursor-pointer"
-                    >
+                    <Banknote className="h-4 w-4 shrink-0 text-neutral-500" />
+                    <p className="flex-1 text-sm font-medium text-neutral-900 dark:text-neutral-100">
                       Cash on Delivery
-                    </Label>
-                  </div>
+                    </p>
+                  </label>
                 </RadioGroup>
 
                 {stripeError && (
                   <Alert variant="destructive" className="mt-4">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{stripeError}</AlertDescription>
+                    <AlertDescription className="text-sm">
+                      {stripeError}
+                    </AlertDescription>
                   </Alert>
                 )}
-              </CardContent>
-            </Card>
+              </SectionCard>
 
-            {/* Order Notes */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Notes (Optional)</CardTitle>
-              </CardHeader>
-              <CardContent>
+              {/* 6 · Order Notes */}
+              <SectionCard>
+                <SectionTitle step={6} title="Order Notes" />
                 <Textarea
-                  placeholder="Add any special instructions or notes for your order..."
+                  placeholder="Special instructions, delivery notes, or preferences…"
+                  rows={3}
+                  className="resize-none text-sm"
                   {...register('notes')}
-                  className="min-h-[100px]"
                 />
-              </CardContent>
-            </Card>
+              </SectionCard>
 
-            {/* Place Order Button - Always visible */}
-            <Card>
-              <CardContent className="pt-6">
-                <Button
-                  className="w-full"
-                  size="lg"
-                  type="button"
-                  onClick={handlePlaceOrder}
-                  disabled={isSubmitting || creatingPaymentIntent}
-                >
-                  {isSubmitting || creatingPaymentIntent ? (
-                    <div className="flex items-center">
-                      <div className="mr-2 h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      {creatingPaymentIntent
-                        ? 'Setting up payment...'
-                        : 'Processing...'}
-                    </div>
-                  ) : (
-                    'Place Order'
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
+              {/* CTA */}
+              <Button
+                className="w-full gap-2 rounded-xl py-6 text-base font-semibold"
+                type="button"
+                size="lg"
+                onClick={handlePlaceOrder}
+                disabled={isSubmitting || creatingPaymentIntent}
+              >
+                {isSubmitting || creatingPaymentIntent ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    {creatingPaymentIntent
+                      ? 'Setting up payment…'
+                      : 'Processing…'}
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-4 w-4" />
+                    Place Order · ${orderTotal.toFixed(2)}
+                  </>
+                )}
+              </Button>
 
-          {/* Order Summary */}
-          <div>
-            <Card className="sticky top-24">
-              <CardHeader>
-                <CardTitle>Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  {items.map((item) => (
-                    <div key={item.id} className="flex gap-2">
-                      <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md">
-                        <Image
-                          src={item.image || '/placeholder.svg'}
-                          alt={item.name}
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between">
-                          <div>
-                            <p className="line-clamp-1 font-medium">
+              <p className="text-center text-xs text-neutral-400">
+                By placing your order you agree to our Terms of Service and
+                Privacy Policy.
+              </p>
+            </div>
+
+            {/* ── Right: sticky order summary ──────────────────────── */}
+            <div>
+              <div className="sticky top-24 space-y-4">
+                <SectionCard>
+                  <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-neutral-400">
+                    Order Summary
+                  </p>
+
+                  {/* Items */}
+                  <div className="space-y-3">
+                    {items.map((item) => (
+                      <div key={item.id} className="flex gap-3">
+                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-neutral-100 dark:bg-neutral-800">
+                          <Image
+                            src={item.image || '/placeholder.svg'}
+                            alt={item.name}
+                            fill
+                            className="object-cover"
+                          />
+                          <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-[9px] font-bold text-white dark:bg-white dark:text-neutral-900">
+                            {item.quantity}
+                          </span>
+                        </div>
+                        <div className="flex flex-1 items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="line-clamp-1 text-sm font-medium text-neutral-900 dark:text-neutral-100">
                               {item.name}
                             </p>
-                            <p className="text-xs text-muted-foreground">
-                              {item.selectedOptions
-                                ? Object.values(item.selectedOptions).join(', ')
-                                : 'Default'}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Qty: {item.quantity}
-                            </p>
+                            {item.selectedOptions && (
+                              <p className="text-[11px] text-neutral-400">
+                                {Object.values(item.selectedOptions).join(
+                                  ' · '
+                                )}
+                              </p>
+                            )}
                           </div>
-                          <div className="font-medium">
+                          <span className="shrink-0 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                             ${(item.price * item.quantity).toFixed(2)}
-                          </div>
+                          </span>
                         </div>
                       </div>
+                    ))}
+                  </div>
+
+                  <Separator className="my-4" />
+
+                  {/* Totals */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-500">Subtotal</span>
+                      <span>${subtotal.toFixed(2)}</span>
                     </div>
-                  ))}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-500">
+                        Shipping
+                        <span className="ml-1 text-neutral-400">
+                          ({selectedShippingMethodObj.name})
+                        </span>
+                      </span>
+                      <span>${selectedShippingCost.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-500">Tax (8%)</span>
+                      <span>${tax.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <Separator className="my-4" />
+
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-neutral-900 dark:text-neutral-100">
+                      Total
+                    </span>
+                    <span className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
+                      ${orderTotal.toFixed(2)}
+                    </span>
+                  </div>
+                </SectionCard>
+
+                {/* Security badge */}
+                <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
+                  <Lock className="h-3.5 w-3.5 text-neutral-400" />
+                  <p className="text-[11px] text-neutral-400">
+                    Secured by 256-bit SSL encryption
+                  </p>
                 </div>
-                <Separator />
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Shipping ({selectedShippingMethodObj.name})</span>
-                  <span>${selectedShippingCost.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Tax (8%)</span>
-                  <span>${tax.toFixed(2)}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between text-lg font-medium">
-                  <span>Total</span>
-                  <span>${orderTotal.toFixed(2)}</span>
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
-        </div>
-      </form>
+        </form>
 
-      {/* Payment Modal */}
-      <Dialog open={showPaymentModal} onOpenChange={setShowPaymentModal}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Complete Payment
-            </DialogTitle>
-            <DialogDescription>
-              Enter your card details to complete the payment of $
-              {orderTotal.toFixed(2)}
-            </DialogDescription>
-          </DialogHeader>
+        {/* ── Payment Modal ─────────────────────────────────────────── */}
+        <Dialog
+          open={showPaymentModal}
+          onOpenChange={(open) => {
+            // Prevent dismissal while payment is processing
+            if (!isSubmitting) setShowPaymentModal(open);
+          }}
+        >
+          <DialogContent className="gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-[460px]">
+            <DialogHeader className="border-b border-neutral-200 px-6 py-5 dark:border-neutral-800">
+              <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 dark:bg-white">
+                  <CreditCard className="h-4 w-4 text-white dark:text-neutral-900" />
+                </div>
+                Complete Payment
+              </DialogTitle>
 
-          {clientSecret && stripePromise && (
-            <Elements
-              stripe={stripePromise}
-              options={{
-                clientSecret,
-                appearance: {
-                  theme: 'stripe',
-                  variables: {
-                    colorPrimary: '#000000'
-                  }
-                }
-              }}
-            >
-              <StripePaymentForm
-                clientSecret={clientSecret}
-                onSuccess={handleStripeSuccess}
-                onError={handleStripeError}
-                isProcessing={isSubmitting}
-                setIsProcessing={setIsSubmitting}
-              />
-            </Elements>
-          )}
+              {/* Total + payment method summary */}
+              <div className="mt-3 flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-3 dark:bg-neutral-800">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-400">
+                    Order Total
+                  </p>
+                  <p className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
+                    ${orderTotal.toFixed(2)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-400">
+                    Method
+                  </p>
+                  <p className="text-sm font-semibold capitalize text-neutral-700 dark:text-neutral-300">
+                    {paymentMethod.replace('_', ' ')}
+                  </p>
+                </div>
+              </div>
+            </DialogHeader>
 
-          <Button
-            variant="ghost"
-            className="mt-2"
-            onClick={closePaymentModal}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-        </DialogContent>
-      </Dialog>
-    </Container>
+            <div className="px-6 py-5">
+              {clientSecret && stripePromise && (
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret,
+                    appearance: {
+                      theme: 'stripe',
+                      variables: { colorPrimary: '#000000' }
+                    }
+                  }}
+                >
+                  <StripePaymentForm
+                    clientSecret={clientSecret}
+                    onSuccess={handleStripeSuccess}
+                    onError={handleStripeError}
+                    isProcessing={isSubmitting}
+                    setIsProcessing={setIsSubmitting}
+                  />
+                </Elements>
+              )}
+
+              <Button
+                variant="ghost"
+                className="mt-3 w-full text-sm text-neutral-400 hover:text-neutral-600"
+                onClick={closePaymentModal}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+            </div>
+
+            {/* Security footer */}
+            <div className="flex items-center justify-center gap-1.5 border-t border-neutral-200 bg-neutral-50 px-6 py-3 dark:border-neutral-800 dark:bg-neutral-900/50">
+              <Lock className="h-3 w-3 text-neutral-400" />
+              <p className="text-[11px] text-neutral-400">
+                Secured by Stripe · 256-bit TLS encryption
+              </p>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </Container>
+    </div>
   );
 }

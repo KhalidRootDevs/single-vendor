@@ -1,4 +1,5 @@
 import { LoginModal } from '@/components/auth/login-modal';
+import { GoogleOneTap } from '@/components/auth/google-one-tap';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/context/auth-context';
 import { CartProvider } from '@/context/cart-context';
@@ -41,6 +42,7 @@ export default function RootLayout({
                   <CartProvider>
                     {children}
                     <LoginModal />
+                    <GoogleOneTap />
                     <Toaster position="top-right" />
                   </CartProvider>
                 </RecentlyViewedProvider>

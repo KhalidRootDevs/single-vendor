@@ -115,19 +115,21 @@ export async function GET(request: NextRequest) {
           return htmlRedirect(`${appUrl}?auth_error=account_suspended`);
         }
 
-        // Link Google to existing email/password account
+        // Link Google to existing email/password account.
+        // updateOne avoids full-document re-validation (won't choke on existing
+        // subdocs that have required fields missing due to legacy/dev data).
+        const linkFields: Record<string, unknown> = {
+          googleId: googleUser.sub,
+          emailVerified: true,
+          lastLogin: new Date()
+        };
+        if (!user.avatar && googleUser.picture) {
+          linkFields.avatar = googleUser.picture;
+        }
         try {
-          user.googleId = googleUser.sub;
-          if (!user.avatar && googleUser.picture) {
-            user.avatar = googleUser.picture;
-          }
-          user.emailVerified = true;
-          user.lastLogin = new Date();
-          await user.save();
+          await User.updateOne({ _id: user._id }, { $set: linkFields });
         } catch (linkErr) {
-          // Log but don't block login — user exists, token is still valid
-          console.error('[Google OAuth] Account link save failed:', linkErr);
-          user.lastLogin = new Date();
+          console.error('[Google OAuth] Account link failed:', linkErr);
         }
       } else {
         // 3. Create brand-new user from Google profile
@@ -139,6 +141,7 @@ export async function GET(request: NextRequest) {
           emailVerified: true,
           status: 'active',
           role: 'user',
+          addresses: [],
           lastLogin: new Date()
         });
       }
@@ -146,8 +149,10 @@ export async function GET(request: NextRequest) {
       if (user.status === 'suspended') {
         return htmlRedirect(`${appUrl}?auth_error=account_suspended`);
       }
-      user.lastLogin = new Date();
-      await user.save();
+      await User.updateOne(
+        { _id: user._id },
+        { $set: { lastLogin: new Date() } }
+      );
     }
 
     const token = generateToken(user);

@@ -1,5 +1,7 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -7,26 +9,25 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import {
-  Package,
-  ArrowLeft,
-  Download,
-  Truck,
-  MapPin,
-  CreditCard,
-  User,
-  Calendar,
-  Loader2
-} from 'lucide-react';
-import Link from 'next/link';
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
 import { toast } from '@/components/ui/use-toast';
-import Image from 'next/image';
+import { cn } from '@/lib/utils';
 import { Order, OrderItem } from '@/types';
+import {
+  ArrowLeft,
+  Calendar,
+  CreditCard,
+  Download,
+  Loader2,
+  MapPin,
+  Package,
+  Truck,
+  User
+} from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -499,12 +500,15 @@ export default function OrderDetailsPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">
+                <span className="text-sm font-medium capitalize">
                   {getPaymentMethodText(order.paymentMethod)}
                 </span>
                 <Badge
                   variant="outline"
-                  className={getPaymentStatusColor(order.paymentStatus)}
+                  className={cn(
+                    getPaymentStatusColor(order.paymentStatus),
+                    'capitalize'
+                  )}
                 >
                   {order.paymentStatus}
                 </Badge>
