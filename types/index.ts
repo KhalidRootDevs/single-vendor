@@ -80,19 +80,40 @@ export interface CategorySummary {
 }
 
 // ============================================================================
+// BANNER TYPES
+// ============================================================================
+
+export interface Banner {
+  _id: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  imagePublicId?: string;
+  link: string;
+  buttonText: string;
+  active: boolean;
+  order: number;
+  startDate?: string;
+  endDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
 // CONTACT TYPES
 // ============================================================================
 
 export type ContactSubmissionStatus = 'new' | 'read' | 'replied' | 'archived';
 
 export interface ContactSubmission {
-  id: number;
+  _id: string;
   name: string;
   email: string;
   subject: string;
   message: string;
   status: ContactSubmissionStatus;
   createdAt: string;
+  updatedAt: string;
 }
 
 // ============================================================================

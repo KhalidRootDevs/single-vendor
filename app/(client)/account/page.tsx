@@ -12,11 +12,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   User,
   Mail,
   Phone,
-  Calendar,
   Edit,
   Save,
   X,
@@ -397,20 +397,16 @@ export default function ProfilePage() {
 
             <div className="space-y-2">
               <Label htmlFor="dateOfBirth">Date of Birth</Label>
-              <div className="relative">
-                <Calendar
-                  className="absolute left-3 top-3 h-4 w-4 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  id="dateOfBirth"
-                  type="date"
-                  value={formData.dateOfBirth}
-                  onChange={setField('dateOfBirth')}
-                  disabled={!isEditing || isSaving}
-                  className="pl-9"
-                />
-              </div>
+              <DatePicker
+                id="dateOfBirth"
+                value={formData.dateOfBirth}
+                onChange={(date) =>
+                  setFormData((prev) => ({ ...prev, dateOfBirth: date }))
+                }
+                disabled={!isEditing || isSaving}
+                placeholder="Select date of birth"
+                maxDate={new Date()}
+              />
             </div>
           </div>
 

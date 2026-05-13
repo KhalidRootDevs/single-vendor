@@ -134,41 +134,45 @@ const storeInfoSchema = new Schema({
   storeName: {
     type: String,
     required: [true, 'Store name is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   storeEmail: {
     type: String,
     required: [true, 'Store email is required'],
     trim: true,
-    lowercase: true
+    lowercase: true,
+    default: ''
   },
   storePhone: {
     type: String,
     required: [true, 'Store phone is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   storeAddress: {
     type: String,
     required: [true, 'Store address is required'],
-    trim: true
+    trim: true,
+    default: ''
   }
 });
 
 const seoSchema = new Schema({
   metaTitle: {
     type: String,
-    required: [true, 'Meta title is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   metaDescription: {
     type: String,
-    required: [true, 'Meta description is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   metaKeywords: {
     type: String,
-    required: [true, 'Meta keywords are required'],
-    trim: true
+    trim: true,
+    default: ''
   }
 });
 
@@ -426,7 +430,6 @@ const analyticsSchema = new Schema({
 const apiSchema = new Schema({
   apiKey: {
     type: String,
-    required: [true, 'API key is required'],
     default: ''
   },
   webhookUrl: {
@@ -442,18 +445,18 @@ const apiSchema = new Schema({
 const cloudinarySchema = new Schema({
   cloudName: {
     type: String,
-    required: [true, 'Cloudinary cloud name is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   apiKey: {
     type: String,
-    required: [true, 'Cloudinary API key is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   apiSecret: {
     type: String,
-    required: [true, 'Cloudinary API secret is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   uploadPreset: {
     type: String,

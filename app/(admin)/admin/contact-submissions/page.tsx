@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -33,16 +33,15 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
-import { Eye, Search, Trash2 } from 'lucide-react';
+import { Eye, Loader2, Search, Trash2 } from 'lucide-react';
 import { Container } from '@/components/ui/container';
 import { toast } from '@/components/ui/use-toast';
 import { ContactSubmission } from '@/types';
+import { apiFetch } from '@/lib/api-fetch';
 
 export default function ContactSubmissionsPage() {
   const [submissions, setSubmissions] = useState<ContactSubmission[]>([]);
-  const [filteredSubmissions, setFilteredSubmissions] = useState<
-    ContactSubmission[]
-  >([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedSubmission, setSelectedSubmission] =
@@ -50,99 +49,118 @@ export default function ContactSubmissionsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
-    // In a real app, this would be an API call
-    const storedSubmissions = localStorage.getItem('contactSubmissions');
-    if (storedSubmissions) {
-      const parsedSubmissions = JSON.parse(storedSubmissions);
-      setSubmissions(parsedSubmissions);
-      setFilteredSubmissions(parsedSubmissions);
-    }
+    fetchSubmissions();
   }, []);
 
-  useEffect(() => {
+  const fetchSubmissions = async () => {
+    try {
+      const res = await apiFetch('/api/admin/contact?limit=200');
+      if (!res.ok) throw new Error('Failed to fetch submissions');
+      const data = await res.json();
+      setSubmissions(data.submissions);
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to load submissions.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredSubmissions = useMemo(() => {
     let filtered = [...submissions];
 
-    // Apply search filter
     if (searchQuery) {
-      const query = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase();
       filtered = filtered.filter(
-        (submission) =>
-          submission.name.toLowerCase().includes(query) ||
-          submission.email.toLowerCase().includes(query) ||
-          submission.subject.toLowerCase().includes(query) ||
-          submission.message.toLowerCase().includes(query)
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.email.toLowerCase().includes(q) ||
+          s.subject.toLowerCase().includes(q) ||
+          s.message.toLowerCase().includes(q)
       );
     }
 
-    // Apply status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(
-        (submission) => submission.status === statusFilter
-      );
+      filtered = filtered.filter((s) => s.status === statusFilter);
     }
 
-    // Sort by date (newest first)
-    filtered.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-
-    setFilteredSubmissions(filtered);
+    return filtered;
   }, [submissions, searchQuery, statusFilter]);
 
-  const handleViewSubmission = (submission: ContactSubmission) => {
-    // Mark as read if it's new
-    if (submission.status === 'new') {
-      const updatedSubmissions = submissions.map((s) =>
-        s.id === submission.id
-          ? { ...s, status: 'read' as ContactSubmission['status'] }
-          : s
-      );
-      setSubmissions(updatedSubmissions as ContactSubmission[]);
-      localStorage.setItem(
-        'contactSubmissions',
-        JSON.stringify(updatedSubmissions)
-      );
-    }
-
+  const handleViewSubmission = async (submission: ContactSubmission) => {
     setSelectedSubmission(submission);
     setIsDialogOpen(true);
+
+    if (submission.status === 'new') {
+      try {
+        await apiFetch(`/api/admin/contact/${submission._id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'read' })
+        });
+        setSubmissions((prev) =>
+          prev.map((s) =>
+            s._id === submission._id ? { ...s, status: 'read' } : s
+          )
+        );
+        setSelectedSubmission({ ...submission, status: 'read' });
+      } catch {
+        // Non-critical — don't show error
+      }
+    }
   };
 
-  const handleDeleteSubmission = (id: number) => {
-    const updatedSubmissions = submissions.filter((s) => s.id !== id);
-    setSubmissions(updatedSubmissions);
-    localStorage.setItem(
-      'contactSubmissions',
-      JSON.stringify(updatedSubmissions)
-    );
-
-    toast({
-      title: 'Submission deleted',
-      description: 'The contact submission has been deleted.'
-    });
-  };
-
-  const handleUpdateStatus = (
-    id: number,
-    status: 'new' | 'read' | 'replied' | 'archived'
+  const handleUpdateStatus = async (
+    id: string,
+    status: ContactSubmission['status']
   ) => {
-    const updatedSubmissions = submissions.map((s) =>
-      s.id === id ? { ...s, status } : s
-    );
-    setSubmissions(updatedSubmissions);
-    localStorage.setItem(
-      'contactSubmissions',
-      JSON.stringify(updatedSubmissions)
-    );
+    try {
+      const res = await apiFetch(`/api/admin/contact/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) throw new Error('Failed to update status');
 
-    toast({
-      title: 'Status updated',
-      description: `The submission status has been updated to "${status}".`
-    });
+      setSubmissions((prev) =>
+        prev.map((s) => (s._id === id ? { ...s, status } : s))
+      );
+      if (selectedSubmission?._id === id) {
+        setSelectedSubmission({ ...selectedSubmission, status });
+      }
+      toast({
+        title: 'Status updated',
+        description: `Status set to "${status}".`
+      });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to update status.',
+        variant: 'destructive'
+      });
+    }
+  };
 
-    if (selectedSubmission?.id === id) {
-      setSelectedSubmission({ ...selectedSubmission, status });
+  const handleDeleteSubmission = async (id: string) => {
+    try {
+      const res = await apiFetch(`/api/admin/contact/${id}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error('Failed to delete submission');
+      setSubmissions((prev) => prev.filter((s) => s._id !== id));
+      toast({
+        title: 'Deleted',
+        description: 'The submission has been deleted.'
+      });
+    } catch {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete submission.',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -210,7 +228,11 @@ export default function ContactSubmissionsPage() {
               </Select>
             </div>
 
-            {filteredSubmissions.length === 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredSubmissions.length === 0 ? (
               <div className="py-8 text-center">
                 <p className="text-muted-foreground">No submissions found.</p>
               </div>
@@ -229,7 +251,7 @@ export default function ContactSubmissionsPage() {
                   </TableHeader>
                   <TableBody>
                     {filteredSubmissions.map((submission) => (
-                      <TableRow key={submission.id}>
+                      <TableRow key={submission._id}>
                         <TableCell>
                           {new Date(submission.createdAt).toLocaleDateString()}
                         </TableCell>
@@ -257,7 +279,7 @@ export default function ContactSubmissionsPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() =>
-                                handleDeleteSubmission(submission.id)
+                                handleDeleteSubmission(submission._id)
                               }
                             >
                               <Trash2 className="h-4 w-4" />
@@ -275,7 +297,6 @@ export default function ContactSubmissionsPage() {
         </Card>
       </div>
 
-      {/* Submission Detail Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
@@ -293,27 +314,25 @@ export default function ContactSubmissionsPage() {
                   <h3 className="font-medium">Status</h3>
                   {getStatusBadge(selectedSubmission.status)}
                 </div>
-                <div className="flex gap-2">
-                  <Select
-                    value={selectedSubmission.status}
-                    onValueChange={(value) =>
-                      handleUpdateStatus(
-                        selectedSubmission.id,
-                        value as 'new' | 'read' | 'replied' | 'archived'
-                      )
-                    }
-                  >
-                    <SelectTrigger className="w-[120px]">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new">New</SelectItem>
-                      <SelectItem value="read">Read</SelectItem>
-                      <SelectItem value="replied">Replied</SelectItem>
-                      <SelectItem value="archived">Archived</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Select
+                  value={selectedSubmission.status}
+                  onValueChange={(value) =>
+                    handleUpdateStatus(
+                      selectedSubmission._id,
+                      value as ContactSubmission['status']
+                    )
+                  }
+                >
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">New</SelectItem>
+                    <SelectItem value="read">Read</SelectItem>
+                    <SelectItem value="replied">Replied</SelectItem>
+                    <SelectItem value="archived">Archived</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <h3 className="font-medium">From</h3>
@@ -335,23 +354,18 @@ export default function ContactSubmissionsPage() {
                 <Button
                   variant="destructive"
                   onClick={() => {
-                    handleDeleteSubmission(selectedSubmission.id);
+                    handleDeleteSubmission(selectedSubmission._id);
                     setIsDialogOpen(false);
                   }}
                 >
                   Delete
                 </Button>
                 <Button
-                  onClick={() => {
-                    handleUpdateStatus(selectedSubmission.id, 'replied');
-                    toast({
-                      title: 'Reply sent',
-                      description:
-                        'In a real application, this would open an email interface.'
-                    });
-                  }}
+                  onClick={() =>
+                    handleUpdateStatus(selectedSubmission._id, 'replied')
+                  }
                 >
-                  Reply
+                  Mark as Replied
                 </Button>
               </div>
             </div>

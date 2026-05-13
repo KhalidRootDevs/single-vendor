@@ -1,44 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Settings } from '@/models/Settings';
 import connectDB from '@/lib/database';
+import { verifyToken } from '@/lib/auth';
 import mongoose from 'mongoose';
 
 export const dynamic = 'force-dynamic';
 
+function requireAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return null;
+  try {
+    const decoded = verifyToken(token);
+    return decoded.role === 'admin' ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
+  if (!requireAdmin(request)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   try {
     await connectDB();
 
-    // Get or create settings
     const settings = await Settings.getSettings();
-
-    // Remove sensitive data before sending
     const safeSettings = JSON.parse(JSON.stringify(settings));
 
-    // Hide Stripe sensitive data
     if (safeSettings.payment?.paymentMethods?.stripe) {
       safeSettings.payment.paymentMethods.stripe.publishableKey = '[HIDDEN]';
       safeSettings.payment.paymentMethods.stripe.secretKey = '[HIDDEN]';
     }
-
-    // Hide PayPal sensitive data
     if (safeSettings.payment?.paymentMethods?.paypal) {
       safeSettings.payment.paymentMethods.paypal.clientId = '[HIDDEN]';
       safeSettings.payment.paymentMethods.paypal.secret = '[HIDDEN]';
     }
-
-    // Hide SMTP sensitive data
     if (safeSettings.email?.provider?.smtp) {
       safeSettings.email.provider.smtp.username = '[HIDDEN]';
       safeSettings.email.provider.smtp.password = '[HIDDEN]';
     }
-
-    // Hide API sensitive data
     if (safeSettings.advanced?.api) {
       safeSettings.advanced.api.apiKey = '[HIDDEN]';
     }
-
-    // Hide Cloudinary sensitive data
     if (safeSettings.advanced?.cloudinary) {
       safeSettings.advanced.cloudinary.apiKey = '[HIDDEN]';
       safeSettings.advanced.cloudinary.apiSecret = '[HIDDEN]';
@@ -55,6 +59,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
+  if (!requireAdmin(request)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   try {
     await connectDB();
 
@@ -68,78 +76,39 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Get existing settings to preserve sensitive fields
     const existingSettings = await Settings.getSettings();
     const existingSettingsObj = existingSettings.toObject();
-
-    // Merge settings, preserving sensitive fields that shouldn't be updated if empty
     const mergedSettings = deepMergeSettings(
       existingSettingsObj,
       updatedSettings
     );
 
-    // Update settings
     const settings = await Settings.findOneAndUpdate(
       {},
       { $set: mergedSettings },
       { new: true, upsert: true, runValidators: true }
     );
 
-    // Remove sensitive data from response
     const safeSettings = JSON.parse(JSON.stringify(settings));
 
-    // Handle payment sensitive fields in response
     if (safeSettings.payment?.paymentMethods?.stripe) {
-      safeSettings.payment.paymentMethods.stripe.publishableKey =
-        updatedSettings.payment?.paymentMethods?.stripe?.publishableKey
-          ? '[UPDATED]'
-          : '[HIDDEN]';
-      safeSettings.payment.paymentMethods.stripe.secretKey = updatedSettings
-        .payment?.paymentMethods?.stripe?.secretKey
-        ? '[UPDATED]'
-        : '[HIDDEN]';
+      safeSettings.payment.paymentMethods.stripe.publishableKey = '[HIDDEN]';
+      safeSettings.payment.paymentMethods.stripe.secretKey = '[HIDDEN]';
     }
-
     if (safeSettings.payment?.paymentMethods?.paypal) {
-      safeSettings.payment.paymentMethods.paypal.clientId = updatedSettings
-        .payment?.paymentMethods?.paypal?.clientId
-        ? '[UPDATED]'
-        : '[HIDDEN]';
-      safeSettings.payment.paymentMethods.paypal.secret = updatedSettings
-        .payment?.paymentMethods?.paypal?.secret
-        ? '[UPDATED]'
-        : '[HIDDEN]';
+      safeSettings.payment.paymentMethods.paypal.clientId = '[HIDDEN]';
+      safeSettings.payment.paymentMethods.paypal.secret = '[HIDDEN]';
     }
-
-    // Handle email sensitive fields in response
     if (safeSettings.email?.provider?.smtp) {
-      safeSettings.email.provider.smtp.username = updatedSettings.email
-        ?.provider?.smtp?.username
-        ? '[UPDATED]'
-        : '[HIDDEN]';
-      safeSettings.email.provider.smtp.password = updatedSettings.email
-        ?.provider?.smtp?.password
-        ? '[UPDATED]'
-        : '[HIDDEN]';
+      safeSettings.email.provider.smtp.username = '[HIDDEN]';
+      safeSettings.email.provider.smtp.password = '[HIDDEN]';
     }
-
-    // Handle API sensitive fields in response
     if (safeSettings.advanced?.api) {
-      safeSettings.advanced.api.apiKey = updatedSettings.advanced?.api?.apiKey
-        ? '[UPDATED]'
-        : '[HIDDEN]';
+      safeSettings.advanced.api.apiKey = '[HIDDEN]';
     }
-
-    // Handle Cloudinary sensitive fields in response
     if (safeSettings.advanced?.cloudinary) {
-      safeSettings.advanced.cloudinary.apiKey = updatedSettings.advanced
-        ?.cloudinary?.apiKey
-        ? '[UPDATED]'
-        : '[HIDDEN]';
-      safeSettings.advanced.cloudinary.apiSecret = updatedSettings.advanced
-        ?.cloudinary?.apiSecret
-        ? '[UPDATED]'
-        : '[HIDDEN]';
+      safeSettings.advanced.cloudinary.apiKey = '[HIDDEN]';
+      safeSettings.advanced.cloudinary.apiSecret = '[HIDDEN]';
     }
 
     return NextResponse.json({
@@ -163,27 +132,46 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// Enhanced deepMergeSettings function to handle sensitive fields properly
+function isSensitiveAt(fullPath: string[]): boolean {
+  const key = fullPath[fullPath.length - 1];
+  const parentPath = fullPath.slice(0, -1).join('.');
+
+  // Always-sensitive keys regardless of location
+  if (['secretKey', 'apiSecret', 'password'].includes(key)) return true;
+
+  // Context-sensitive keys
+  if (key === 'publishableKey' && parentPath.includes('stripe')) return true;
+  if (key === 'clientId' && parentPath.includes('paypal')) return true;
+  if (key === 'secret' && parentPath.includes('paypal')) return true;
+  if (key === 'username' && parentPath.includes('smtp')) return true;
+  if (
+    key === 'apiKey' &&
+    (parentPath.includes('cloudinary') || parentPath === 'advanced.api')
+  )
+    return true;
+
+  return false;
+}
+
 function deepMergeSettings(existing: any, updated: any): any {
   const result = JSON.parse(JSON.stringify(existing));
 
-  // Helper function to merge objects recursively
-  function mergeDeep(target: any, source: any) {
+  function mergeDeep(target: any, source: any, path: string[]) {
     for (const key in source) {
       if (
-        source[key] &&
+        source[key] !== null &&
         typeof source[key] === 'object' &&
         !Array.isArray(source[key])
       ) {
         if (!target[key]) target[key] = {};
-        mergeDeep(target[key], source[key]);
+        mergeDeep(target[key], source[key], [...path, key]);
       } else {
-        // Handle sensitive fields - only update if new value is provided
-        if (isSensitiveField(key, target, source)) {
+        const currentPath = [...path, key];
+        if (isSensitiveAt(currentPath)) {
+          // Only update if new value is non-empty — preserve existing secret otherwise
           if (source[key] && source[key] !== '') {
             target[key] = source[key];
           }
-          // If source value is empty, preserve existing value
         } else {
           target[key] = source[key];
         }
@@ -191,95 +179,6 @@ function deepMergeSettings(existing: any, updated: any): any {
     }
   }
 
-  mergeDeep(result, updated);
+  mergeDeep(result, updated, []);
   return result;
-}
-
-// Function to identify sensitive fields that shouldn't be overwritten with empty values
-function isSensitiveField(key: string, target: any, source: any): boolean {
-  const sensitiveFields = [
-    'publishableKey',
-    'secretKey',
-    'secret',
-    'clientId',
-    'password',
-    'apiSecret'
-  ];
-
-  // Check if this is a sensitive field in common structures
-  if (sensitiveFields.includes(key)) {
-    return true;
-  }
-
-  // Additional context-aware checks
-  const path = getObjectPath(target, source);
-
-  // Cloudinary sensitive fields
-  if (
-    path.includes('cloudinary') &&
-    (key === 'apiKey' || key === 'apiSecret')
-  ) {
-    return true;
-  }
-
-  // Stripe sensitive fields
-  if (
-    path.includes('stripe') &&
-    (key === 'publishableKey' || key === 'secretKey')
-  ) {
-    return true;
-  }
-
-  // PayPal sensitive fields
-  if (path.includes('paypal') && (key === 'clientId' || key === 'secret')) {
-    return true;
-  }
-
-  // SMTP sensitive fields
-  if (path.includes('smtp') && (key === 'username' || key === 'password')) {
-    return true;
-  }
-
-  // API sensitive fields
-  if (path.includes('api') && key === 'apiKey') {
-    return true;
-  }
-
-  return false;
-}
-
-// Helper function to get object path for context-aware sensitive field detection
-function getObjectPath(target: any, source: any): string {
-  // Check Cloudinary path
-  if (target?.advanced?.cloudinary && source?.advanced?.cloudinary) {
-    return 'advanced.cloudinary';
-  }
-
-  // Check Stripe path
-  if (
-    target?.payment?.paymentMethods?.stripe &&
-    source?.payment?.paymentMethods?.stripe
-  ) {
-    return 'payment.paymentMethods.stripe';
-  }
-
-  // Check PayPal path
-  if (
-    target?.payment?.paymentMethods?.paypal &&
-    source?.payment?.paymentMethods?.paypal
-  ) {
-    return 'payment.paymentMethods.paypal';
-  }
-
-  // Check SMTP path
-  if (target?.email?.provider?.smtp && source?.email?.provider?.smtp) {
-    return 'email.provider.smtp';
-  }
-
-  // Check API path
-  if (target?.advanced?.api && source?.advanced?.api) {
-    return 'advanced.api';
-  }
-
-  return '';
 }

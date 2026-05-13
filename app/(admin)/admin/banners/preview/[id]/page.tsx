@@ -1,56 +1,49 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
+import { ArrowLeft, Edit, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
-import { ArrowLeft, Edit } from 'lucide-react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-
-// Mock banner data
-const bannersData = {
-  '1': {
-    id: 1,
-    title: 'Summer Collection',
-    description: 'Discover our new summer collection with up to 50% off',
-    image: '/placeholder.svg?height=600&width=1200',
-    link: '/products?category=summer',
-    buttonText: 'Shop Now',
-    active: true,
-    order: 1,
-    startDate: '2023-06-01',
-    endDate: '2023-08-31'
-  },
-  '2': {
-    id: 2,
-    title: 'New Arrivals',
-    description: 'Check out our latest products just for you',
-    image: '/placeholder.svg?height=600&width=1200',
-    link: '/products?tag=new',
-    buttonText: 'Explore',
-    active: true,
-    order: 2,
-    startDate: '2023-05-15',
-    endDate: '2023-12-31'
-  },
-  '3': {
-    id: 3,
-    title: 'Limited Offers',
-    description: 'Special deals for a limited time only',
-    image: '/placeholder.svg?height=600&width=1200',
-    link: '/products?tag=limited',
-    buttonText: 'View Offers',
-    active: false,
-    order: 3,
-    startDate: '2023-07-01',
-    endDate: '2023-07-15'
-  }
-};
+import { Badge } from '@/components/ui/badge';
+import { toast } from '@/components/ui/use-toast';
+import { apiFetch } from '@/lib/api-fetch';
+import { Banner } from '@/types';
 
 export default function BannerPreviewPage() {
   const params = useParams();
   const bannerId = params.id as string;
-  const banner = bannersData[bannerId as keyof typeof bannersData];
+  const [banner, setBanner] = useState<Banner | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`/api/admin/banners/${bannerId}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Banner not found');
+        return res.json();
+      })
+      .then((data) => setBanner(data.banner))
+      .catch(() =>
+        toast({
+          title: 'Error',
+          description: 'Failed to load banner.',
+          variant: 'destructive'
+        })
+      )
+      .finally(() => setIsLoading(false));
+  }, [bannerId]);
+
+  if (isLoading) {
+    return (
+      <Container>
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </Container>
+    );
+  }
 
   if (!banner) {
     return (
@@ -95,7 +88,7 @@ export default function BannerPreviewPage() {
               </p>
             </div>
           </div>
-          <Link href={`/admin/banners/${banner.id}`}>
+          <Link href={`/admin/banners/${banner._id}`}>
             <Button>
               <Edit className="mr-2 h-4 w-4" />
               Edit Banner
@@ -108,7 +101,7 @@ export default function BannerPreviewPage() {
             <h3 className="mb-2 text-sm font-medium">Desktop View</h3>
             <div className="relative h-[400px] overflow-hidden rounded-lg">
               <Image
-                src={banner.image || '/placeholder.svg'}
+                src={banner.imageUrl || '/placeholder.svg'}
                 alt={banner.title}
                 fill
                 className="object-cover"
@@ -135,7 +128,7 @@ export default function BannerPreviewPage() {
             <h3 className="mb-2 text-sm font-medium">Mobile View</h3>
             <div className="relative mx-auto h-[500px] max-w-[375px] overflow-hidden rounded-lg">
               <Image
-                src={banner.image || '/placeholder.svg'}
+                src={banner.imageUrl || '/placeholder.svg'}
                 alt={banner.title}
                 fill
                 className="object-cover"
@@ -162,35 +155,39 @@ export default function BannerPreviewPage() {
             <h3 className="mb-2 text-sm font-medium">Banner Details</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="font-medium">Status:</p>
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    banner.active
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}
+                <p className="font-medium">Status</p>
+                <Badge
+                  className={banner.active ? 'bg-green-500' : 'bg-yellow-500'}
                 >
                   {banner.active ? 'Active' : 'Inactive'}
-                </span>
+                </Badge>
               </div>
               <div>
-                <p className="font-medium">Display Order:</p>
+                <p className="font-medium">Display Order</p>
                 <p>{banner.order}</p>
               </div>
               <div>
-                <p className="font-medium">Start Date:</p>
-                <p>{banner.startDate}</p>
+                <p className="font-medium">Start Date</p>
+                <p>
+                  {banner.startDate
+                    ? new Date(banner.startDate).toLocaleDateString()
+                    : 'No start date'}
+                </p>
               </div>
               <div>
-                <p className="font-medium">End Date:</p>
-                <p>{banner.endDate}</p>
+                <p className="font-medium">End Date</p>
+                <p>
+                  {banner.endDate
+                    ? new Date(banner.endDate).toLocaleDateString()
+                    : 'No end date'}
+                </p>
               </div>
               <div>
-                <p className="font-medium">Link URL:</p>
+                <p className="font-medium">Link URL</p>
                 <p className="truncate">{banner.link}</p>
               </div>
               <div>
-                <p className="font-medium">Button Text:</p>
+                <p className="font-medium">Button Text</p>
                 <p>{banner.buttonText}</p>
               </div>
             </div>

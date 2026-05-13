@@ -9,7 +9,7 @@ import AdminSidebar from '@/components/layout/admin/sidebar';
 import { useAuth } from '@/context/auth-context';
 import { UNAUTHORIZED_EVENT } from '@/lib/api-fetch';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 export default function AdminLayout({
   children
@@ -17,9 +17,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }>) {
   const router = useRouter();
-  const { user, isLoading, checkAuth } = useAuth();
-  const hasCheckedAuth = useRef(false);
-  const isRedirectingRef = useRef(false);
+  const { user, isLoading } = useAuth();
 
   // Intercept all fetch calls in the admin panel.
   // Any 401 response dispatches UNAUTHORIZED_EVENT → auth-context handles logout + redirect.
@@ -37,35 +35,20 @@ export default function AdminLayout({
     };
   }, []);
 
-  // Check if user has admin role
   const isAdmin =
     user?.role === 'admin' ||
     user?.role === 'moderator' ||
     user?.role === 'support';
 
-  // Redirect logic - only run once after loading is complete
+  // Only redirect after auth check is complete (isLoading = false)
   useEffect(() => {
-    // If loading is complete and we haven't checked auth yet
-    if (!isLoading && !hasCheckedAuth.current) {
-      hasCheckedAuth.current = true;
-
-      // If no user is logged in, redirect to home
-      if (!user) {
-        isRedirectingRef.current = true;
-        router.push('/');
-        return;
-      }
-
-      // If user is logged in but doesn't have admin role, redirect to home
-      if (user && !isAdmin) {
-        isRedirectingRef.current = true;
-        router.push('/');
-        return;
-      }
+    if (isLoading) return;
+    if (!user || !isAdmin) {
+      router.replace('/');
     }
   }, [isLoading, user, isAdmin, router]);
 
-  // Show loading state
+  // Show loading while auth check is in flight
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900">
@@ -77,18 +60,15 @@ export default function AdminLayout({
     );
   }
 
-  // If redirecting or no user/admin access, don't render layout
-  if (isRedirectingRef.current || !user || !isAdmin) {
+  // Auth settled — not an admin, redirect is in flight
+  if (!user || !isAdmin) {
     return null;
   }
 
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
-        {/* Sidebar */}
         <AdminSidebar />
-
-        {/* Main content */}
         <div className="flex-1">
           <AdminHeader />
           <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>

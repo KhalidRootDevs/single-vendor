@@ -70,10 +70,19 @@ export const bannerSchema = z.object({
   description: z
     .string()
     .min(10, { message: 'Description must be at least 10 characters' }),
-  link: z.string().url({ message: 'Please enter a valid URL' }),
+  link: z
+    .string()
+    .min(1, { message: 'Link is required' })
+    .refine(
+      (val) =>
+        val.startsWith('/') ||
+        val.startsWith('http://') ||
+        val.startsWith('https://'),
+      { message: 'Link must be a URL (https://...) or a relative path (/)' }
+    ),
   buttonText: z.string().min(1, { message: 'Button text is required' }),
-  startDate: z.string().min(1, { message: 'Start date is required' }),
-  endDate: z.string().min(1, { message: 'End date is required' }),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
   active: z.boolean().default(true)
 });
 
@@ -227,11 +236,9 @@ export const settingsSchema = z.object({
       storeAddress: z.string().min(1, { message: 'Address is required' })
     }),
     seo: z.object({
-      metaTitle: z.string().min(1, { message: 'Meta title is required' }),
-      metaDescription: z
-        .string()
-        .min(1, { message: 'Meta description is required' }),
-      metaKeywords: z.string().min(1, { message: 'Meta keywords are required' })
+      metaTitle: z.string(),
+      metaDescription: z.string(),
+      metaKeywords: z.string()
     }),
     socialMedia: z.object({
       facebook: z.union([
@@ -253,19 +260,59 @@ export const settingsSchema = z.object({
     })
   }),
   payment: z.object({
-    paymentMethods: z.object({
-      creditCards: z.boolean(),
-      stripe: z.object({
-        publishableKey: z.string().optional(),
-        secretKey: z.string().optional()
+    paymentMethods: z
+      .object({
+        creditCards: z.boolean(),
+        stripe: z.object({
+          publishableKey: z.string(),
+          secretKey: z.string()
+        }),
+        paypal: z.object({
+          enabled: z.boolean(),
+          clientId: z.string(),
+          secret: z.string()
+        }),
+        cashOnDelivery: z.boolean()
+      })
+      .superRefine((data, ctx) => {
+        if (data.creditCards) {
+          if (
+            !data.stripe.publishableKey ||
+            data.stripe.publishableKey === ''
+          ) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message:
+                'Stripe publishable key is required when credit cards are enabled',
+              path: ['stripe', 'publishableKey']
+            });
+          }
+          if (!data.stripe.secretKey || data.stripe.secretKey === '') {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message:
+                'Stripe secret key is required when credit cards are enabled',
+              path: ['stripe', 'secretKey']
+            });
+          }
+        }
+        if (data.paypal.enabled) {
+          if (!data.paypal.clientId || data.paypal.clientId === '') {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'PayPal client ID is required when PayPal is enabled',
+              path: ['paypal', 'clientId']
+            });
+          }
+          if (!data.paypal.secret || data.paypal.secret === '') {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'PayPal secret is required when PayPal is enabled',
+              path: ['paypal', 'secret']
+            });
+          }
+        }
       }),
-      paypal: z.object({
-        enabled: z.boolean(),
-        clientId: z.string().optional(),
-        secret: z.string().optional()
-      }),
-      cashOnDelivery: z.boolean()
-    }),
     currency: z.object({
       defaultCurrency: z.enum(['usd', 'eur', 'gbp', 'cad', 'aud']),
       currencyFormat: z.enum(['symbol', 'code', 'symbol-code'])
@@ -300,21 +347,30 @@ export const settingsSchema = z.object({
     })
   }),
   email: z.object({
-    provider: z.object({
-      service: z.enum(['smtp', 'sendgrid', 'mailchimp', 'aws-ses']),
-      smtp: z
-        .object({
-          host: z
-            .string()
-            .min(1, { message: 'SMTP host is required' })
-            .optional(),
-          port: z.number().min(1).max(65535).optional(),
-          security: z.enum(['none', 'ssl', 'tls']).optional(),
-          username: z.string().optional(),
-          password: z.string().optional()
-        })
-        .optional()
-    }),
+    provider: z
+      .object({
+        service: z.enum(['smtp', 'sendgrid', 'mailchimp', 'aws-ses']),
+        smtp: z
+          .object({
+            host: z.string(),
+            port: z.number().min(1).max(65535).optional(),
+            security: z.enum(['none', 'ssl', 'tls']).optional(),
+            username: z.string(),
+            password: z.string()
+          })
+          .optional()
+      })
+      .superRefine((data, ctx) => {
+        if (data.service === 'smtp') {
+          if (!data.smtp?.host || data.smtp.host === '') {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'SMTP host is required when using SMTP service',
+              path: ['smtp', 'host']
+            });
+          }
+        }
+      }),
     notifications: z.object({
       orderConfirmation: z.boolean(),
       shippingConfirmation: z.boolean(),
@@ -325,17 +381,11 @@ export const settingsSchema = z.object({
     })
   }),
   cms: z.object({
-    termsAndConditions: z
-      .string()
-      .min(1, { message: 'Terms and conditions content is required' }),
-    privacyPolicy: z
-      .string()
-      .min(1, { message: 'Privacy policy content is required' }),
-    returnPolicy: z
-      .string()
-      .min(1, { message: 'Return policy content is required' }),
-    aboutUs: z.string().min(1, { message: 'About us content is required' }),
-    faq: z.string().min(1, { message: 'FAQ content is required' })
+    termsAndConditions: z.string(),
+    privacyPolicy: z.string(),
+    returnPolicy: z.string(),
+    aboutUs: z.string(),
+    faq: z.string()
   }),
   advanced: z.object({
     analytics: z.object({
@@ -344,7 +394,7 @@ export const settingsSchema = z.object({
       enabled: z.boolean()
     }),
     api: z.object({
-      apiKey: z.string().min(1, { message: 'API key is required' }),
+      apiKey: z.string(),
       webhookUrl: z.union([
         z.string().url({ message: 'Invalid URL' }),
         z.literal('')
@@ -352,12 +402,12 @@ export const settingsSchema = z.object({
       webhooksEnabled: z.boolean()
     }),
     cloudinary: z.object({
-      cloudName: z.string().min(1, { message: 'Cloud name is required' }),
-      apiKey: z.string().min(1, { message: 'API key is required' }),
-      apiSecret: z.string().min(1, { message: 'API secret is required' }),
+      cloudName: z.string(),
+      apiKey: z.string(),
+      apiSecret: z.string(),
       uploadPreset: z.string().optional(),
       secure: z.boolean(),
-      folder: z.string().min(1, { message: 'Folder is required' })
+      folder: z.string()
     }),
     performance: z.object({
       pageCaching: z.boolean(),

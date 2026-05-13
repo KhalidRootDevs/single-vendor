@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Select,
   SelectContent,
@@ -600,14 +601,15 @@ export default function UserDetailsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                    <Input
+                    <DatePicker
                       id="dateOfBirth"
-                      type="date"
                       value={user.dateOfBirth || ''}
-                      onChange={(e) =>
-                        setUser({ ...user, dateOfBirth: e.target.value })
+                      onChange={(date) =>
+                        setUser({ ...user, dateOfBirth: date })
                       }
                       disabled={!isEditing}
+                      placeholder="Select date of birth"
+                      maxDate={new Date()}
                     />
                   </div>
                 </div>

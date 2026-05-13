@@ -1,8 +1,16 @@
 'use client';
 
-import type React from 'react';
+import { useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
+import { ImageDropzone } from '@/components/ui/image-dropzone';
 import {
   Card,
   CardContent,
@@ -17,22 +25,19 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 import { BannerFormValues, bannerSchema } from '@/lib/validations/index';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Loader2, Upload } from 'lucide-react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { apiFetch } from '@/lib/api-fetch';
 
 export default function NewBannerPage() {
   const router = useRouter();
-  const [image, setImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     register,
     handleSubmit,
+    control,
+    watch,
     formState: { errors }
   } = useForm<BannerFormValues>({
     resolver: zodResolver(bannerSchema) as any,
@@ -41,27 +46,23 @@ export default function NewBannerPage() {
       description: '',
       link: '',
       buttonText: 'Shop Now',
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0],
+      startDate: '',
+      endDate: '',
       active: true
     }
   });
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImage(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+  const watchedTitle = watch('title');
+  const watchedDescription = watch('description');
+  const watchedButtonText = watch('buttonText');
+
+  const handleImageChange = (file: File | null) => {
+    setImageFile(file);
+    setImagePreview(file ? URL.createObjectURL(file) : null);
   };
 
   const onSubmit = async (data: BannerFormValues) => {
-    if (!image) {
+    if (!imageFile) {
       toast({
         title: 'Image required',
         description: 'Please upload a banner image.',
@@ -71,16 +72,42 @@ export default function NewBannerPage() {
     }
 
     setIsSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('title', data.title);
+      formData.append('description', data.description);
+      formData.append('link', data.link);
+      formData.append('buttonText', data.buttonText);
+      formData.append('active', String(data.active));
+      if (data.startDate) formData.append('startDate', data.startDate);
+      if (data.endDate) formData.append('endDate', data.endDate);
+      formData.append('image', imageFile);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+      const res = await apiFetch('/api/admin/banners', {
+        method: 'POST',
+        body: formData
+      });
 
-    toast({
-      title: 'Banner created',
-      description: 'Your banner has been created successfully.'
-    });
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error || 'Failed to create banner');
+      }
 
-    router.push('/admin/banners');
+      toast({
+        title: 'Banner created',
+        description: 'Your banner has been created successfully.'
+      });
+      router.push('/admin/banners');
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description:
+          error instanceof Error ? error.message : 'Failed to create banner.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -150,7 +177,7 @@ export default function NewBannerPage() {
                   </Label>
                   <Input
                     id="link"
-                    placeholder="e.g., https://yourstore.com/products?category=summer"
+                    placeholder="e.g., /products?category=summer or https://..."
                     {...register('link')}
                   />
                   {errors.link && (
@@ -178,31 +205,34 @@ export default function NewBannerPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="startDate">
-                      Start Date <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="startDate"
-                      type="date"
-                      {...register('startDate')}
+                    <Label htmlFor="startDate">Start Date</Label>
+                    <Controller
+                      name="startDate"
+                      control={control}
+                      render={({ field }) => (
+                        <DatePicker
+                          id="startDate"
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="Start date"
+                        />
+                      )}
                     />
-                    {errors.startDate && (
-                      <p className="text-sm text-red-500">
-                        {errors.startDate.message}
-                      </p>
-                    )}
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="endDate">
-                      End Date <span className="text-red-500">*</span>
-                    </Label>
-                    <Input id="endDate" type="date" {...register('endDate')} />
-                    {errors.endDate && (
-                      <p className="text-sm text-red-500">
-                        {errors.endDate.message}
-                      </p>
-                    )}
+                    <Label htmlFor="endDate">End Date</Label>
+                    <Controller
+                      name="endDate"
+                      control={control}
+                      render={({ field }) => (
+                        <DatePicker
+                          id="endDate"
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="End date"
+                        />
+                      )}
+                    />
                   </div>
                 </div>
 
@@ -213,7 +243,17 @@ export default function NewBannerPage() {
                       Display this banner on your store.
                     </p>
                   </div>
-                  <Switch id="active" {...register('active')} />
+                  <Controller
+                    name="active"
+                    control={control}
+                    render={({ field }) => (
+                      <Switch
+                        id="active"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    )}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -226,72 +266,47 @@ export default function NewBannerPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="relative aspect-[2/1] overflow-hidden rounded-md border bg-muted">
-                  {image ? (
-                    <Image
-                      src={image || '/placeholder.svg'}
-                      alt="Banner preview"
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-                      <Upload className="mb-2 h-10 w-10" />
-                      <p>No image uploaded</p>
-                    </div>
-                  )}
-                </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="image">
+                  <Label>
                     Upload Image <span className="text-red-500">*</span>
                   </Label>
-                  <Input
-                    id="image"
-                    type="file"
-                    accept="image/*"
+                  <ImageDropzone
+                    value={imageFile}
                     onChange={handleImageChange}
+                    hint="Recommended: 1200×600px. Max 5 MB. JPG, PNG, or WebP."
+                    className="aspect-[2/1]"
                   />
-                  <p className="text-sm text-muted-foreground">
-                    Recommended size: 1200x600px. Max file size: 2MB. Supported
-                    formats: JPG, PNG, WebP.
-                  </p>
                 </div>
 
-                <div className="pt-4">
-                  <h4 className="mb-2 text-sm font-medium">Banner Preview</h4>
-                  <div className="rounded-md border bg-muted/50 p-4">
-                    <div className="relative h-[150px] overflow-hidden rounded-md">
-                      {image ? (
-                        <>
-                          <Image
-                            src={image || '/placeholder.svg'}
-                            alt="Banner preview"
-                            fill
-                            className="object-cover"
-                          />
-                          <div className="absolute inset-0 flex items-center bg-black/40">
-                            <div className="container px-4">
-                              <h3 className="mb-2 text-xl font-bold text-white">
-                                Your Banner Title
-                              </h3>
-                              <p className="mb-4 text-sm text-white/90">
-                                Your banner description will appear here.
-                              </p>
-                              <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
-                                Button Text
-                              </button>
-                            </div>
+                {imagePreview && (
+                  <div className="pt-2">
+                    <h4 className="mb-2 text-sm font-medium">Preview</h4>
+                    <div className="rounded-md border bg-muted/50 p-3">
+                      <div className="relative h-[130px] overflow-hidden rounded-md">
+                        <Image
+                          src={imagePreview}
+                          alt="Banner preview"
+                          fill
+                          className="object-cover"
+                        />
+                        <div className="absolute inset-0 flex items-center bg-black/40">
+                          <div className="px-4">
+                            <h3 className="mb-1 text-lg font-bold text-white">
+                              {watchedTitle || 'Your Banner Title'}
+                            </h3>
+                            <p className="mb-3 text-sm text-white/90">
+                              {watchedDescription ||
+                                'Your banner description will appear here.'}
+                            </p>
+                            <button className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
+                              {watchedButtonText || 'Button Text'}
+                            </button>
                           </div>
-                        </>
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-muted-foreground">
-                          Banner preview will appear here
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>

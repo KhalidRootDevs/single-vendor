@@ -34,7 +34,7 @@ async function getProducts(type: GridType): Promise<Product[]> {
       .populate('categoryId', 'name slug')
       .lean();
 
-    return products as unknown as Product[];
+    return JSON.parse(JSON.stringify(products)) as Product[];
   } catch (error) {
     console.error(`Error fetching ${type} products:`, error);
     return [];

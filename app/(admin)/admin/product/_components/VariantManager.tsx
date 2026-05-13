@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useFieldArray, useFormContext } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ImageFile } from '@/components/custom/product-image-upload';
+import { useImageDrop } from '@/components/ui/image-dropzone';
 import { cn } from '@/lib/utils';
 import { generateVariantSku } from './sku-utils';
 import {
@@ -24,6 +25,23 @@ import { ProductFormValues } from './schema';
 
 type Attribute = { name: string; values: string[] };
 
+function VariantUploadTrigger({ onFile }: { onFile: (f: File) => void }) {
+  const { getRootProps, getInputProps, open } = useImageDrop({ onFile });
+  return (
+    <div {...getRootProps()}>
+      <input {...getInputProps()} />
+      <button
+        type="button"
+        onClick={open}
+        className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
+      >
+        <Upload className="h-4 w-4" />
+        Upload
+      </button>
+    </div>
+  );
+}
+
 export function VariantManager() {
   const { control, register, watch, setValue, getValues } =
     useFormContext<ProductFormValues>();
@@ -36,10 +54,6 @@ export function VariantManager() {
   const [attributes, setAttributes] = useState<Attribute[]>([]);
   const [attrName, setAttrName] = useState('');
   const [attrValues, setAttrValues] = useState('');
-
-  // Shared hidden file input for variant image uploads
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const activeVariantRef = useRef<number>(-1);
 
   const productImages: ImageFile[] = (watch('images') as ImageFile[]) ?? [];
   const baseSku = watch('sku') ?? '';
@@ -101,30 +115,13 @@ export function VariantManager() {
     setValue(`variants.${variantIdx}.image`, preview, { shouldDirty: true });
   };
 
-  const handleVariantImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || activeVariantRef.current < 0) return;
-
+  const addVariantImageFile = (variantIdx: number, file: File) => {
     const imageFile: ImageFile = Object.assign(file, {
       preview: URL.createObjectURL(file)
     });
-
-    // Add to product images array
     const current = (getValues('images') as ImageFile[]) ?? [];
-    const newIndex = current.length;
     setValue('images', [...current, imageFile], { shouldDirty: true });
-
-    // Set as variant's image
-    selectVariantImage(activeVariantRef.current, imageFile.preview);
-
-    // Reset input so the same file can be selected again if needed
-    e.target.value = '';
-    activeVariantRef.current = -1;
-  };
-
-  const triggerVariantUpload = (variantIdx: number) => {
-    activeVariantRef.current = variantIdx;
-    fileInputRef.current?.click();
+    selectVariantImage(variantIdx, imageFile.preview);
   };
 
   const regenVariantSku = (idx: number) => {
@@ -137,15 +134,6 @@ export function VariantManager() {
 
   return (
     <div className="space-y-6">
-      {/* Hidden file input for variant image upload */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleVariantImageFile}
-      />
-
       {/* ── Attribute builder ─────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
@@ -427,14 +415,9 @@ export function VariantManager() {
                     ))}
 
                     {/* Upload new variant image */}
-                    <button
-                      type="button"
-                      onClick={() => triggerVariantUpload(idx)}
-                      className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
-                    >
-                      <Upload className="h-4 w-4" />
-                      Upload
-                    </button>
+                    <VariantUploadTrigger
+                      onFile={(file) => addVariantImageFile(idx, file)}
+                    />
                   </div>
 
                   {/* Current selection preview */}

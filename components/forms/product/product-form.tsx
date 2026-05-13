@@ -170,50 +170,25 @@ export function ProductForm({
     }
   }, [product, isEditing, reset]);
 
-  const handleAdditionalImagesChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = e.target.files;
-    if (files) {
-      const newImages: string[] = [];
-      const newFiles: File[] = [];
+  const handleAdditionalImagesChange = (files: File[]) => {
+    const valid = files.filter((file) => {
+      if (file.size > 2 * 1024 * 1024) {
+        toast({
+          title: 'File too large',
+          description: `"${file.name}" exceeds 2 MB and was skipped.`,
+          variant: 'destructive'
+        });
+        return false;
+      }
+      return true;
+    });
 
-      Array.from(files).forEach((file) => {
-        // Validate file type and size
-        if (!file.type.startsWith('image/')) {
-          toast({
-            title: 'Invalid file type',
-            description: 'Please upload image files only.',
-            variant: 'destructive'
-          });
-          return;
-        }
+    if (valid.length === 0) return;
 
-        if (file.size > 2 * 1024 * 1024) {
-          toast({
-            title: 'File too large',
-            description: 'Please upload images smaller than 2MB.',
-            variant: 'destructive'
-          });
-          return;
-        }
-
-        newFiles.push(file);
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          if (e.target?.result) {
-            newImages.push(e.target.result as string);
-            if (newImages.length === files.length) {
-              setAdditionalImages((prev) => [...prev, ...newImages]);
-              setImageFiles((prev) => [...prev, ...newFiles]);
-              setAvailableImages((prev) => [...prev, ...newImages]);
-            }
-          }
-        };
-        reader.readAsDataURL(file);
-      });
-    }
+    const newUrls = valid.map((f) => URL.createObjectURL(f));
+    setAdditionalImages((prev) => [...prev, ...newUrls]);
+    setImageFiles((prev) => [...prev, ...valid]);
+    setAvailableImages((prev) => [...prev, ...newUrls]);
   };
 
   const removeImage = (index: number) => {
@@ -416,7 +391,7 @@ export function ProductForm({
               <ProductAdditionalImage
                 additionalImages={additionalImages}
                 removeImage={removeImage}
-                handleAdditionalImagesChange={handleAdditionalImagesChange}
+                onFilesAdded={handleAdditionalImagesChange}
               />
             </TabsContent>
 

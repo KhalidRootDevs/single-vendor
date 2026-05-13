@@ -13,18 +13,24 @@ import { toast } from '@/components/ui/use-toast';
 import { SettingsFormData, settingsSchema } from '@/lib/validations/index';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Save } from 'lucide-react';
-import type React from 'react';
 import { useEffect, useState } from 'react';
-import { FormProvider, useForm } from 'react-hook-form';
+import { FieldErrors, FormProvider, useForm } from 'react-hook-form';
+
+// Strip [HIDDEN] / [UPDATED] sentinel values returned by the API so they are
+// never written back to the database on the next save.
+const stripHidden = (val: string | undefined): string =>
+  val === '[HIDDEN]' || val === '[UPDATED]' ? '' : val || '';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [logo, setLogo] = useState<string | null>(
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [faviconFile, setFaviconFile] = useState<File | null>(null);
+  const [logoUrl] = useState<string | null>(
     '/placeholder.svg?height=100&width=200'
   );
-  const [favicon, setFavicon] = useState<string | null>(
+  const [faviconUrl] = useState<string | null>(
     '/placeholder.svg?height=32&width=32'
   );
 
@@ -158,21 +164,28 @@ export default function SettingsPage() {
   });
 
   const {
-    register,
     handleSubmit,
     formState: { errors, isSubmitting },
-    watch,
     setValue,
-    getValues,
     reset
   } = methods;
+
+  // Derive which tabs have validation errors
+  const tabHasError = {
+    general: Boolean(errors.general),
+    payment: Boolean(errors.payment),
+    shipping: Boolean(errors.shipping),
+    email: Boolean(errors.email),
+    cms: Boolean(errors.cms),
+    advanced: Boolean(errors.advanced)
+  };
 
   // Fetch settings on component mount
   useEffect(() => {
     async function fetchSettings() {
       try {
         setIsLoading(true);
-        const response = await fetch('/api/settings');
+        const response = await fetch('/api/admin/settings');
 
         if (!response.ok) {
           throw new Error('Failed to fetch settings');
@@ -181,7 +194,6 @@ export default function SettingsPage() {
         const data = await response.json();
 
         if (data.settings) {
-          // Transform the API response to match our form structure
           const transformedSettings = transformSettingsFromAPI(data.settings);
           reset(transformedSettings);
         }
@@ -200,7 +212,7 @@ export default function SettingsPage() {
     fetchSettings();
   }, [reset]);
 
-  // Transform API response to form structure
+  // Transform API response to form structure, stripping [HIDDEN] sentinel values
   const transformSettingsFromAPI = (apiSettings: any): SettingsFormData => {
     return {
       general: {
@@ -226,17 +238,22 @@ export default function SettingsPage() {
         paymentMethods: {
           creditCards: apiSettings.payment?.paymentMethods?.creditCards ?? true,
           stripe: {
-            publishableKey:
-              apiSettings.payment?.paymentMethods?.stripe?.publishableKey || '',
-            secretKey:
-              apiSettings.payment?.paymentMethods?.stripe?.secretKey || ''
+            publishableKey: stripHidden(
+              apiSettings.payment?.paymentMethods?.stripe?.publishableKey
+            ),
+            secretKey: stripHidden(
+              apiSettings.payment?.paymentMethods?.stripe?.secretKey
+            )
           },
           paypal: {
             enabled:
               apiSettings.payment?.paymentMethods?.paypal?.enabled ?? false,
-            clientId:
-              apiSettings.payment?.paymentMethods?.paypal?.clientId || '',
-            secret: apiSettings.payment?.paymentMethods?.paypal?.secret || ''
+            clientId: stripHidden(
+              apiSettings.payment?.paymentMethods?.paypal?.clientId
+            ),
+            secret: stripHidden(
+              apiSettings.payment?.paymentMethods?.paypal?.secret
+            )
           },
           cashOnDelivery:
             apiSettings.payment?.paymentMethods?.cashOnDelivery ?? true
@@ -286,8 +303,8 @@ export default function SettingsPage() {
             host: apiSettings.email?.provider?.smtp?.host || '',
             port: apiSettings.email?.provider?.smtp?.port || 587,
             security: apiSettings.email?.provider?.smtp?.security || 'tls',
-            username: apiSettings.email?.provider?.smtp?.username || '',
-            password: apiSettings.email?.provider?.smtp?.password || ''
+            username: stripHidden(apiSettings.email?.provider?.smtp?.username),
+            password: stripHidden(apiSettings.email?.provider?.smtp?.password)
           }
         },
         notifications: {
@@ -321,14 +338,14 @@ export default function SettingsPage() {
           enabled: apiSettings.advanced?.analytics?.enabled ?? false
         },
         api: {
-          apiKey: apiSettings.advanced?.api?.apiKey || '',
+          apiKey: stripHidden(apiSettings.advanced?.api?.apiKey),
           webhookUrl: apiSettings.advanced?.api?.webhookUrl || '',
           webhooksEnabled: apiSettings.advanced?.api?.webhooksEnabled ?? false
         },
         cloudinary: {
           cloudName: apiSettings.advanced?.cloudinary?.cloudName || '',
-          apiKey: apiSettings.advanced?.cloudinary?.apiKey || '',
-          apiSecret: apiSettings.advanced?.cloudinary?.apiSecret || '',
+          apiKey: stripHidden(apiSettings.advanced?.cloudinary?.apiKey),
+          apiSecret: stripHidden(apiSettings.advanced?.cloudinary?.apiSecret),
           uploadPreset: apiSettings.advanced?.cloudinary?.uploadPreset || '',
           secure: apiSettings.advanced?.cloudinary?.secure ?? true,
           folder: apiSettings.advanced?.cloudinary?.folder || 'ecommerce'
@@ -353,27 +370,8 @@ export default function SettingsPage() {
     };
   };
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setLogo(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleFaviconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setFavicon(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  const handleLogoChange = (file: File | null) => setLogoFile(file);
+  const handleFaviconChange = (file: File | null) => setFaviconFile(file);
 
   const onSubmit = async (data: SettingsFormData) => {
     setIsSaving(true);
@@ -386,8 +384,6 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({ settings: data })
       });
-
-      console.log('Settings Response', response);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -416,48 +412,31 @@ export default function SettingsPage() {
     }
   };
 
-  // Save individual section
-  const saveSection = async (section: string, sectionData: any) => {
-    try {
-      const response = await fetch(`/api/settings/${section}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ [section]: sectionData })
-      });
+  // Navigate to the first tab that has validation errors and notify the user
+  const onError = (fieldErrors: FieldErrors<SettingsFormData>) => {
+    const tabs = [
+      'general',
+      'payment',
+      'shipping',
+      'email',
+      'cms',
+      'advanced'
+    ] as const;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || `Failed to save ${section} settings`
-        );
+    for (const tab of tabs) {
+      if (fieldErrors[tab]) {
+        setActiveTab(tab);
+        toast({
+          title: 'Validation errors',
+          description: `Please fix the highlighted errors in the "${tab}" tab before saving.`,
+          variant: 'destructive'
+        });
+        return;
       }
-
-      const result = await response.json();
-
-      toast({
-        title: 'Settings saved',
-        description:
-          result.message || `${section} settings have been saved successfully.`
-      });
-
-      return true;
-    } catch (error) {
-      console.error(`Error saving ${section} settings:`, error);
-      toast({
-        title: 'Error',
-        description:
-          error instanceof Error
-            ? error.message
-            : `Failed to save ${section} settings. Please try again.`,
-        variant: 'destructive'
-      });
-      return false;
     }
   };
 
-  // Helper function to handle boolean changes
+  // Helper function to handle boolean changes (used by child components)
   const handleBooleanChange = (path: string, value: boolean) => {
     setValue(path as any, value);
   };
@@ -484,26 +463,56 @@ export default function SettingsPage() {
         </div>
 
         <FormProvider {...methods}>
-          <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit, onError)}>
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
               className="space-y-4"
             >
               <TabsList className="grid w-full grid-cols-2 md:grid-cols-6">
-                <TabsTrigger value="general">General</TabsTrigger>
-                <TabsTrigger value="payment">Payment</TabsTrigger>
-                <TabsTrigger value="shipping">Shipping</TabsTrigger>
-                <TabsTrigger value="email">Email</TabsTrigger>
-                <TabsTrigger value="cms">CMS</TabsTrigger>
-                <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                <TabsTrigger value="general" className="relative">
+                  General
+                  {tabHasError.general && (
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="payment" className="relative">
+                  Payment
+                  {tabHasError.payment && (
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="shipping" className="relative">
+                  Shipping
+                  {tabHasError.shipping && (
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="email" className="relative">
+                  Email
+                  {tabHasError.email && (
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="cms" className="relative">
+                  CMS
+                  {tabHasError.cms && (
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="advanced" className="relative">
+                  Advanced
+                  {tabHasError.advanced && (
+                    <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
+                  )}
+                </TabsTrigger>
               </TabsList>
 
               {/* General Settings */}
               <TabsContent value="general">
                 <GeneralSettings
-                  logo={logo}
-                  favicon={favicon}
+                  logo={logoFile ?? logoUrl}
+                  favicon={faviconFile ?? faviconUrl}
                   handleLogoChange={handleLogoChange}
                   handleFaviconChange={handleFaviconChange}
                 />
@@ -537,7 +546,7 @@ export default function SettingsPage() {
               </TabsContent>
             </Tabs>
 
-            <div className="flex justify-end">
+            <div className="mt-5 flex justify-end">
               <Button type="submit" disabled={isSaving || isSubmitting}>
                 {isSaving || isSubmitting ? (
                   <>

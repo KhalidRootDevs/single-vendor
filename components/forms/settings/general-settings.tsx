@@ -8,8 +8,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ImageDropzone } from '@/components/ui/image-dropzone';
 import { SettingsFormData } from '@/lib/validations';
-import Image from 'next/image';
 import { useFormContext } from 'react-hook-form';
 
 export default function General({
@@ -18,10 +18,10 @@ export default function General({
   favicon,
   handleFaviconChange
 }: {
-  logo: string | null;
-  favicon: string | null;
-  handleLogoChange: any;
-  handleFaviconChange: any;
+  logo: File | string | null;
+  favicon: File | string | null;
+  handleLogoChange: (file: File | null) => void;
+  handleFaviconChange: (file: File | null) => void;
 }) {
   const {
     register,
@@ -96,61 +96,27 @@ export default function General({
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="space-y-4">
+            <div className="space-y-2">
               <Label>Store Logo</Label>
-              <div className="flex flex-col items-center justify-center rounded-md border p-4">
-                {logo ? (
-                  <div className="relative mb-4 h-20 w-40">
-                    <Image
-                      src={logo || '/placeholder.svg'}
-                      alt="Store logo"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="mb-4 flex h-20 w-40 items-center justify-center bg-muted">
-                    <p className="text-muted-foreground">No logo</p>
-                  </div>
-                )}
-                <Input
-                  id="logo"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoChange}
-                />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Recommended size: 200x100px. Max file size: 1MB.
-                </p>
-              </div>
+              <ImageDropzone
+                value={logo}
+                onChange={handleLogoChange}
+                objectFit="contain"
+                maxSize={1024 * 1024}
+                hint="Recommended: 200×100px. Max 1 MB."
+                className="aspect-[2/1]"
+              />
             </div>
-            <div className="space-y-4">
+            <div className="space-y-2">
               <Label>Favicon</Label>
-              <div className="flex flex-col items-center justify-center rounded-md border p-4">
-                {favicon ? (
-                  <div className="relative mb-4 h-10 w-10">
-                    <Image
-                      src={favicon || '/placeholder.svg'}
-                      alt="Favicon"
-                      fill
-                      className="object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="mb-4 flex h-10 w-10 items-center justify-center bg-muted">
-                    <p className="text-xs text-muted-foreground">No icon</p>
-                  </div>
-                )}
-                <Input
-                  id="favicon"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFaviconChange}
-                />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Recommended size: 32x32px. Max file size: 100KB.
-                </p>
-              </div>
+              <ImageDropzone
+                value={favicon}
+                onChange={handleFaviconChange}
+                objectFit="contain"
+                maxSize={100 * 1024}
+                hint="Recommended: 32×32px. Max 100 KB."
+                className="aspect-square"
+              />
             </div>
           </div>
         </CardContent>

@@ -1,14 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Settings } from '@/models/Settings';
 import connectDB from '@/lib/database';
+import { verifyToken } from '@/lib/auth';
 import { isMongooseValidationError } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
+
+function requireAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return null;
+  try {
+    const decoded = verifyToken(token);
+    return decoded.role === 'admin' ? decoded : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { section: string } }
 ) {
+  if (!requireAdmin(request)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   try {
     await connectDB();
 
@@ -23,7 +39,6 @@ export async function PATCH(
       );
     }
 
-    // Valid sections
     const validSections = [
       'general',
       'payment',
@@ -40,16 +55,13 @@ export async function PATCH(
       );
     }
 
-    // Update only the specific section
     const settings = await Settings.findOneAndUpdate(
       {},
       { $set: { [section]: sectionData } },
       { new: true, upsert: true, runValidators: true }
     );
 
-    // Remove sensitive data from response
     const safeSettings = JSON.parse(JSON.stringify(settings));
-    // ... (same sensitive data handling as above)
 
     return NextResponse.json({
       settings: safeSettings,
