@@ -1,9 +1,45 @@
 import { Settings } from '@/models/Settings';
 import { v2 as cloudinary } from 'cloudinary';
-import { useSearchParams } from 'next/navigation';
 
-// Configure Cloudinary with settings from database
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif'
+]);
+
+function validateFile(file: Blob): void {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error('File size must be under 10 MB');
+  }
+  if (
+    'type' in file &&
+    (file as File).type &&
+    !ALLOWED_MIME_TYPES.has((file as File).type)
+  ) {
+    throw new Error(
+      'Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed'
+    );
+  }
+}
+
+// Prefers environment variables so secrets stay out of MongoDB.
 export const configureCloudinary = async (): Promise<typeof cloudinary> => {
+  const envCloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const envApiKey = process.env.CLOUDINARY_API_KEY;
+  const envApiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (envCloudName && envApiKey && envApiSecret) {
+    cloudinary.config({
+      cloud_name: envCloudName,
+      api_key: envApiKey,
+      api_secret: envApiSecret,
+      secure: true
+    });
+    return cloudinary;
+  }
+
   try {
     const settings = await Settings.getSettings();
     const cloudinaryConfig = settings.advanced.cloudinary;
@@ -26,16 +62,9 @@ export const configureCloudinary = async (): Promise<typeof cloudinary> => {
     return cloudinary;
   } catch (error) {
     console.error('Failed to configure Cloudinary from settings:', error);
-
-    // Fallback to environment variables if database configuration fails
-    cloudinary.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
-      api_key: process.env.CLOUDINARY_API_KEY!,
-      api_secret: process.env.CLOUDINARY_API_SECRET!,
-      secure: true
-    });
-
-    return cloudinary;
+    throw new Error(
+      'Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.'
+    );
   }
 };
 
@@ -54,6 +83,8 @@ export const uploadToCloudinary = async (
     resourceType?: 'image' | 'video' | 'auto' | 'raw';
   }
 ): Promise<{ secure_url: string; public_id: string }> => {
+  validateFile(file);
+
   const cloudinaryInstance = await configureCloudinary();
   const settings = await Settings.getSettings();
   const cloudinaryConfig = settings.advanced.cloudinary;
@@ -96,7 +127,6 @@ export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
   await cloudinaryInstance.uploader.destroy(publicId);
 };
 
-// Utility function for specific upload types
 export const uploadCategoryImage = async (file: Blob) => {
   return uploadToCloudinary(file, {
     folder: 'categories',
@@ -130,7 +160,6 @@ export const uploadUserAvatar = async (file: Blob) => {
   });
 };
 
-// Batch operations
 export const deleteMultipleFromCloudinary = async (
   publicIds: string[]
 ): Promise<void> => {
@@ -138,54 +167,20 @@ export const deleteMultipleFromCloudinary = async (
 
   if (publicIds.length === 0) return;
 
-  if (publicIds.length === 1) {
-    await cloudinaryInstance.uploader.destroy(publicIds[0]);
-    return;
-  }
-
-  // Delete multiple images
   await Promise.all(
     publicIds.map((publicId) => cloudinaryInstance.uploader.destroy(publicId))
   );
 };
 
-// Get Cloudinary configuration from settings (useful for frontend)
 export const getCloudinaryConfig = async () => {
   const settings = await Settings.getSettings();
   const cloudinaryConfig = settings.advanced.cloudinary;
 
   return {
-    cloudName: cloudinaryConfig.cloudName,
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || cloudinaryConfig.cloudName,
     uploadPreset: cloudinaryConfig.uploadPreset,
     folder: cloudinaryConfig.folder
   };
 };
 
 export default cloudinary;
-
-// Example uses
-
-// // Example 1: Upload a category image
-// const categoryImage = await uploadCategoryImage(file);
-
-// // Example 2: Upload a product image
-// const productImage = await uploadProductImage(file);
-
-// // Example 3: Upload with custom options
-// const customUpload = await uploadToCloudinary(file, {
-//   folder: "custom-folder",
-//   resourceType: "image",
-//   transformation: [
-//     { width: 500, height: 500, crop: "fill" },
-//     { quality: 80 },
-//   ],
-// });
-
-// // Example 4: Delete an image
-// await deleteFromCloudinary("your-public-id");
-
-// // Example 5: Delete multiple images
-// await deleteMultipleFromCloudinary(["id1", "id2", "id3"]);
-
-// // Example 6: Get Cloudinary config for frontend
-// const config = await getCloudinaryConfig();

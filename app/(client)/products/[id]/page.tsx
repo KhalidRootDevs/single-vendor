@@ -14,42 +14,19 @@ import { toast } from '@/components/ui/use-toast';
 import { WishlistButton } from '@/components/wishlist-button';
 import { useCart } from '@/context/cart-context';
 import { useRecentlyViewed } from '@/context/recently-viewed-context';
-import { GroupedVariant, Product, ProductVariant, Review } from '@/types';
+import { useAuth } from '@/context/auth-context';
+import { GroupedVariant, Product, ProductVariant } from '@/types';
+import { ReviewSection } from '@/components/product/ReviewSection';
 import { Minus, Plus, ShoppingCart, Star } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 
-// Mock reviews data (you can replace this with an API later)
-const mockReviews: Review[] = [
-  {
-    id: '1',
-    user: 'John D.',
-    rating: 5,
-    comment:
-      'Great quality product. Fits perfectly and the material is very comfortable.',
-    date: '2023-05-15'
-  },
-  {
-    id: '2',
-    user: 'Sarah M.',
-    rating: 4,
-    comment: 'Nice product, good quality. Exactly as described.',
-    date: '2023-04-22'
-  },
-  {
-    id: '3',
-    user: 'Michael P.',
-    rating: 5,
-    comment: 'Excellent product. This is my third purchase!',
-    date: '2023-03-10'
-  }
-];
-
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { addItem } = useCart();
   const { addItem: addToRecentlyViewed } = useRecentlyViewed();
+  const { user } = useAuth();
   const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -672,7 +649,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         <TabsList className="w-full justify-start">
           <TabsTrigger value="description">Description</TabsTrigger>
           <TabsTrigger value="reviews">
-            Reviews ({mockReviews.length})
+            Reviews ({product.reviewCount})
           </TabsTrigger>
           <TabsTrigger value="shipping">Shipping & Returns</TabsTrigger>
           <TabsTrigger value="specifications">Specifications</TabsTrigger>
@@ -690,33 +667,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         </TabsContent>
 
         <TabsContent value="reviews" className="py-4">
-          <div className="space-y-6">
-            {mockReviews.map((review) => (
-              <Card key={review.id} className="p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold">{review.user}</p>
-                    <div className="mt-1 flex items-center">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Star
-                          key={i}
-                          className={`h-4 w-4 ${
-                            i < review.rating
-                              ? 'fill-current text-yellow-400'
-                              : 'text-gray-300'
-                          }`}
-                        />
-                      ))}
-                      <span className="ml-2 text-sm text-muted-foreground">
-                        {review.date}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <p className="mt-2">{review.comment}</p>
-              </Card>
-            ))}
-          </div>
+          <ReviewSection productId={product._id} isAuthenticated={!!user} />
         </TabsContent>
 
         <TabsContent value="shipping" className="py-4">

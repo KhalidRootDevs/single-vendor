@@ -46,8 +46,8 @@ export default function UserRegisterForm() {
     setSuccess(null);
 
     try {
-      const success = await registerUser(data.name, data.email, data.password);
-      if (success) {
+      const result = await registerUser(data.name, data.email, data.password);
+      if (result.ok) {
         resetRegisterForm();
         setSuccess('Registration successful! You are now logged in.');
         setTimeout(() => {
@@ -55,7 +55,8 @@ export default function UserRegisterForm() {
         }, 1500);
       } else {
         setError(
-          'Email already registered. Please use a different email address.'
+          result.error ??
+            'Email already registered. Please use a different email address.'
         );
       }
     } catch (err) {

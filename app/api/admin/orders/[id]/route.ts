@@ -4,6 +4,11 @@ import { Order } from '@/models/Order';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 import { isMongooseValidationError } from '@/lib/utils';
+import { logAuditEvent } from '@/lib/audit';
+import {
+  sendShippingConfirmationEmail,
+  sendOrderCancelledEmail
+} from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
 
@@ -108,13 +113,44 @@ export async function PATCH(
       });
     }
 
+    const previousStatus = order.isModified('status')
+      ? order.get('status', null, { getters: false })
+      : null;
     await order.save();
+
+    // Send transactional emails on status transitions
+    if (status && status !== previousStatus) {
+      if (status === 'shipped') {
+        sendShippingConfirmationEmail(
+          order.customer.email,
+          order.customer.name,
+          order.orderNumber,
+          trackingNumber || order.trackingNumber
+        ).catch(() => {});
+      } else if (status === 'cancelled') {
+        sendOrderCancelledEmail(
+          order.customer.email,
+          order.customer.name,
+          order.orderNumber
+        ).catch(() => {});
+      }
+    }
 
     // Return populated order
     const updatedOrder = await Order.findById(id)
       .populate('customer.id', 'name email phone')
       .populate('items.productId', 'name images sku')
       .populate('timeline.updatedBy', 'name email');
+
+    logAuditEvent({
+      adminId: decoded.userId,
+      adminEmail: decoded.email,
+      action: 'UPDATE_ORDER_STATUS',
+      resourceType: 'Order',
+      resourceId: id,
+      after: { status, paymentStatus, trackingNumber },
+      ip: request.headers.get('x-forwarded-for') || undefined
+    }).catch(() => {});
 
     return NextResponse.json({
       message: 'Order updated successfully',
@@ -243,6 +279,13 @@ export async function DELETE(
     });
 
     await order.save();
+
+    sendOrderCancelledEmail(
+      order.customer.email,
+      order.customer.name,
+      order.orderNumber,
+      reason
+    ).catch(() => {});
 
     const updatedOrder = await Order.findById(id)
       .populate('customer.id', 'name email phone')

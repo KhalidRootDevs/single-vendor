@@ -105,7 +105,7 @@ function ProfileMenu({
 }: {
   variant?: 'mobile' | 'desktop';
 }) {
-  const { user, logout, isLoading } = useAuth();
+  const { user, logout, isAuthReady } = useAuth();
   const { openLoginModal } = useModal();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -132,7 +132,7 @@ function ProfileMenu({
     return user?.email?.charAt(0).toUpperCase() || 'U';
   };
 
-  if (isLoading) {
+  if (!isAuthReady) {
     return (
       <Button
         variant="ghost"

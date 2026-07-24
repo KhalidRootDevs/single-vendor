@@ -196,6 +196,7 @@ export interface Order {
   tax: number;
   shipping: number;
   discount?: number;
+  couponCode?: string;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
@@ -289,12 +290,79 @@ export interface ProductCardProps {
 // REVIEW TYPES
 // ============================================================================
 
+export type ReviewStatus = 'pending' | 'approved' | 'rejected';
+
 export interface Review {
-  id: string;
-  user: string;
+  _id: string;
+  productId: string;
+  userId: string | { _id: string; name: string; email: string };
+  userName: string;
   rating: number;
-  comment: string;
-  date: string;
+  title: string;
+  body: string;
+  verified: boolean;
+  status: ReviewStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
+// COUPON TYPES
+// ============================================================================
+
+export type CouponType = 'percent' | 'fixed';
+
+export interface Coupon {
+  _id: string;
+  code: string;
+  type: CouponType;
+  value: number;
+  minSubtotal: number;
+  maxUses: number;
+  usedCount: number;
+  perUserLimit: number;
+  active: boolean;
+  expiresAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
+// RETURN TYPES
+// ============================================================================
+
+export type ReturnReason =
+  | 'defective'
+  | 'wrong_item'
+  | 'not_as_described'
+  | 'changed_mind'
+  | 'other';
+export type ReturnStatus = 'pending' | 'approved' | 'rejected' | 'refunded';
+
+export interface ReturnItem {
+  productId: string;
+  name: string;
+  quantity: number;
+  price: number;
+  reason: string;
+}
+
+export interface Return {
+  _id: string;
+  returnNumber: string;
+  orderId: string | { _id: string; orderNumber: string };
+  orderNumber: string;
+  userId: string | { _id: string; name: string; email: string };
+  userEmail: string;
+  items: ReturnItem[];
+  reason: ReturnReason;
+  description: string;
+  status: ReturnStatus;
+  refundAmount: number;
+  refundId?: string;
+  adminNotes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ============================================================================

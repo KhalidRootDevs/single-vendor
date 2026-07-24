@@ -49,6 +49,7 @@ export interface IOrder extends Document {
   tax: number;
   shipping: number;
   discount?: number;
+  couponCode?: string;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
@@ -253,6 +254,11 @@ const orderSchema = new Schema<IOrder>(
     discount: {
       type: Number,
       min: [0, 'Discount must be positive']
+    },
+    couponCode: {
+      type: String,
+      trim: true,
+      uppercase: true
     },
     status: {
       type: String,

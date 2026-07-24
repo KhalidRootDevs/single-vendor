@@ -2,11 +2,23 @@ import connectDB from '@/lib/database';
 import { Contact } from '@/models/Contact';
 import { isMongooseValidationError } from '@/lib/utils';
 import { NextRequest, NextResponse } from 'next/server';
+import { contactLimiter, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    if (contactLimiter) {
+      const ip = getClientIp(request);
+      const { success } = await contactLimiter.limit(ip);
+      if (!success) {
+        return NextResponse.json(
+          { error: 'Too many submissions. Please wait a few minutes.' },
+          { status: 429 }
+        );
+      }
+    }
+
     await connectDB();
 
     const body = await request.json();

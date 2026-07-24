@@ -60,6 +60,9 @@ export interface IUser extends Document {
   emailVerificationExpiry?: Date;
   passwordResetToken?: string;
   passwordResetExpiry?: Date;
+  failedLoginAttempts: number;
+  lockoutUntil?: Date;
+  wishlist: mongoose.Types.ObjectId[];
   preferences: {
     newsletter: boolean;
     marketing: boolean;
@@ -295,6 +298,21 @@ const userSchema = new Schema<IUser>(
       type: Date,
       select: false
     },
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+      select: false
+    },
+    lockoutUntil: {
+      type: Date,
+      select: false
+    },
+    wishlist: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Product'
+      }
+    ],
     preferences: {
       newsletter: {
         type: Boolean,

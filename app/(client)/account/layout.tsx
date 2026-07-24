@@ -15,7 +15,9 @@ import {
   CreditCard,
   MapPin,
   Settings,
-  LogOut
+  LogOut,
+  Loader2,
+  RotateCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +25,7 @@ const navigation = [
   { name: 'Profile', href: '/account', icon: User },
   { name: 'Security', href: '/account/security', icon: Lock },
   { name: 'Orders', href: '/account/orders', icon: Package },
+  { name: 'Returns', href: '/account/returns', icon: RotateCcw },
   { name: 'Payments', href: '/account/payments', icon: CreditCard },
   { name: 'Addresses', href: '/account/addresses', icon: MapPin },
   { name: 'Settings', href: '/account/settings', icon: Settings }
@@ -33,22 +36,30 @@ export default function AccountLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, logout } = useAuth();
+  const { user, isAuthReady, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
+    if (!isAuthReady) return;
     if (!user) {
-      router.push('/');
+      router.replace('/');
     }
-  }, [user, router]);
+  }, [isAuthReady, user, router]);
 
-  if (!user) {
-    return null;
+  // Show a centered spinner while the session check is in flight.
+  if (!isAuthReady) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
-  const handleLogout = () => {
-    logout();
+  if (!user) return null;
+
+  const handleLogout = async () => {
+    await logout();
     router.push('/');
   };
 

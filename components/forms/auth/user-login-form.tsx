@@ -45,13 +45,15 @@ export default function UserLoginForm() {
     setSuccess(null);
 
     try {
-      const ok = await login(data.email, data.password);
-      if (ok) {
+      const result = await login(data.email, data.password);
+      if (result.ok) {
         resetLoginForm();
         setSuccess('Login successful!');
         setTimeout(() => closeAuthModal(), 800);
       } else {
-        setError('Invalid email or password. Please try again.');
+        setError(
+          result.error ?? 'Invalid email or password. Please try again.'
+        );
       }
     } catch {
       setError('An error occurred. Please try again.');

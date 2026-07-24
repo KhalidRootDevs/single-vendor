@@ -14,9 +14,10 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 export default function AdminLoginForm() {
-  const { login, isLoading } = useAuth();
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
   const {
@@ -34,31 +35,54 @@ export default function AdminLoginForm() {
 
   const onSubmit = async (data: AdminLoginFormValues) => {
     setError(null);
-    const success = await login(data.email, data.password);
-
-    if (!success) {
-      setError('Invalid email or password. Please try again.');
-    } else {
-      router.push('/admin/dashboard');
+    setIsSubmitting(true);
+    try {
+      const result = await login(data.email, data.password);
+      if (!result.ok) {
+        setError(
+          result.error ?? 'Invalid email or password. Please try again.'
+        );
+      } else {
+        router.push('/admin/dashboard');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // One-click development login
+  // One-click development login — auto-creates the admin user if none exists
   const handleDevLogin = async () => {
     setError(null);
+    setIsSubmitting(true);
     const devEmail = 'admin@example.com';
-    const devPassword = 'admin@example.com';
-
-    // Optionally fill the form fields for visual feedback
+    const devPassword = 'Admin@123';
     setValue('email', devEmail);
     setValue('password', devPassword);
+    try {
+      // Ensure the admin user exists
+      const setupRes = await fetch('/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: devEmail,
+          password: devPassword,
+          name: 'Admin'
+        })
+      });
+      // 201 = created, 409 = already exists — both are fine
+      if (!setupRes.ok && setupRes.status !== 409) {
+        setError('Could not create admin user. Check server logs.');
+        return;
+      }
 
-    const success = await login(devEmail, devPassword);
-
-    if (!success) {
-      setError('Invalid email or password. Please try again.');
-    } else {
-      router.push('/admin/dashboard');
+      const result = await login(devEmail, devPassword);
+      if (!result.ok) {
+        setError(result.error ?? 'Login failed. Try signing in manually.');
+      } else {
+        router.push('/admin/dashboard');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -128,9 +152,9 @@ export default function AdminLoginForm() {
       <Button
         type="submit"
         className="h-11 w-full bg-gradient-to-r from-purple-600 to-blue-600 font-medium text-white shadow-lg shadow-purple-500/25 transition-all duration-200 hover:from-purple-700 hover:to-blue-700"
-        disabled={isLoading}
+        disabled={isSubmitting}
       >
-        {isLoading ? (
+        {isSubmitting ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Signing in...
@@ -144,14 +168,14 @@ export default function AdminLoginForm() {
       <Button
         type="button"
         onClick={handleDevLogin}
-        disabled={isLoading}
+        disabled={isSubmitting}
         className="h-11 w-full border border-slate-700 bg-slate-800/50 font-medium text-slate-300 transition-all duration-200 hover:bg-slate-800 hover:text-white"
         variant="outline"
       >
-        {isLoading ? (
+        {isSubmitting ? (
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
         ) : (
-          '🔧 Quick Dev Login (admin@example.com)'
+          '🔧 Quick Dev Login (admin@example.com / Admin@123)'
         )}
       </Button>
     </form>

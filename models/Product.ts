@@ -227,6 +227,7 @@ productSchema.index({ active: 1, salesCount: -1 }); // best-selling sort
 productSchema.index({ active: 1, rating: -1 }); // rating sort
 productSchema.index({ active: 1, price: 1 }); // price-asc sort + range filter
 productSchema.index({ active: 1, price: -1 }); // price-desc sort
+productSchema.index({ active: 1, categoryId: 1, price: 1 }); // category filter + price sort
 
 // Full-text search across name, tags (high weight) and description (low weight).
 // NOTE: MongoDB allows only one text index per collection.

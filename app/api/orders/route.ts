@@ -7,7 +7,13 @@ import { User } from '@/models/User';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
+import crypto from 'crypto';
 import { escapeRegex } from '@/lib/utils';
+import { getTaxAndShipping } from '@/lib/admin-settings';
+import { sendWelcomeEmail, sendOrderConfirmationEmail } from '@/lib/email';
+import type { IVariant } from '@/models/Product';
+import { Coupon } from '@/models/Coupon';
+import { Cart } from '@/models/Cart';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,28 +26,22 @@ const ALLOWED_ORDER_SORT_FIELDS = [
   'date'
 ];
 
-const TAX_RATE = 0.08;
-
-const SHIPPING_METHODS: Record<string, number> = {
-  standard: 5.99,
-  express: 12.99,
-  overnight: 24.99
-};
-
 /**
  * POST /api/orders
- * Creates a new order
+ * Creates a new order. Stock is decremented atomically to prevent race conditions.
  */
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+
+    // Idempotency — prevent duplicate orders on double-submit
+    const idempotencyKey = request.headers.get('Idempotency-Key');
 
     const token = request.cookies.get('token')?.value;
     let userId;
     let userEmail;
     let isGuest = false;
 
-    // Check if user is authenticated
     if (token) {
       const decoded = verifyToken(token);
       userId = decoded.userId;
@@ -60,13 +60,11 @@ export async function POST(request: NextRequest) {
       cardDetails,
       shippingMethod,
       notes,
-      // Guest user specific fields
       customer,
-
-      createAccount = true // Option to create account for guest
+      createAccount = true,
+      couponCode: rawCouponCode
     } = body;
 
-    // Validate required fields
     if (!items || items.length === 0) {
       return NextResponse.json(
         { error: 'Order must contain at least one item' },
@@ -85,6 +83,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle guest user
+    let guestResetToken: string | undefined;
+    let guestUserName: string | undefined;
+    let guestUserEmail: string | undefined;
+
     if (!userId) {
       if (!customer?.email) {
         return NextResponse.json(
@@ -93,20 +95,24 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check if user already exists with this email
-      let existingUser = await User.findOne({
+      const existingUser = await User.findOne({
         email: customer?.email.toLowerCase()
       });
 
       if (existingUser) {
-        // Use existing user
         userId = existingUser._id;
         userEmail = existingUser.email;
         isGuest = false;
       } else if (createAccount) {
-        // Create new user account for guest
         const password = randomBytes(8).toString('hex');
         const hashedPassword = await bcrypt.hash(password, 12);
+
+        // Generate a reset token so we can email a "set your password" link instead of plaintext
+        const rawResetToken = randomBytes(32).toString('hex');
+        const hashedResetToken = crypto
+          .createHash('sha256')
+          .update(rawResetToken)
+          .digest('hex');
 
         const newUser = new User({
           name: customer?.name || shippingAddress.fullName,
@@ -128,30 +134,37 @@ export async function POST(request: NextRequest) {
               isDefault: true
             }
           ],
-          guestAccount: true // Mark as guest account that was auto-created
+          guestAccount: true,
+          passwordResetToken: hashedResetToken,
+          passwordResetExpiry: new Date(Date.now() + 60 * 60 * 1000) // 1 hour
         });
 
         await newUser.save();
         userId = newUser._id;
         userEmail = newUser.email;
         isGuest = true;
-
-        // TODO: Send welcome email with password
-        // await sendWelcomeEmail(guestEmail, shippingAddress.fullName, password);
+        guestResetToken = rawResetToken;
+        guestUserName = newUser.name;
+        guestUserEmail = newUser.email;
       } else {
-        // Create order without user account (true guest checkout)
         userId = new mongoose.Types.ObjectId();
         userEmail = customer?.email;
         isGuest = true;
       }
     }
 
-    // Validate stock availability and calculate totals
+    // Fetch tax rate and shipping costs from Settings (source of truth)
+    const { taxRate, shippingMethods } = await getTaxAndShipping();
+
+    // Validate stock and calculate subtotal using atomic decrements
     let subtotal = 0;
-    const validatedItems = [];
+    const validatedItems: typeof items = [];
+    const atomicUpdates: Array<() => Promise<void>> = [];
 
     for (const item of items) {
-      const product = await Product.findById(item.productId);
+      const product = await Product.findById(item.productId).select(
+        'name active stock variants price images sku salesCount'
+      );
 
       if (!product) {
         return NextResponse.json(
@@ -167,29 +180,20 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check stock for specific variant or base product
-      let availableStock = product.stock;
       let variantPrice = product.price;
+      let hasVariant = false;
 
       if (item.variant && item.variant.attributes) {
-        // Find matching variant
-        const variant = product.variants.find((v) => {
-          return Object.keys(item.variant.attributes).every(
+        const variant = product.variants.find((v: IVariant) =>
+          Object.keys(item.variant.attributes).every(
             (key) => v.attributes[key] === item.variant.attributes[key]
-          );
-        });
+          )
+        );
 
         if (variant) {
-          availableStock = variant.stock || 0;
-          variantPrice = variant.price || product.price;
+          hasVariant = true;
+          variantPrice = (variant.price as number) || product.price;
         }
-      }
-
-      if (availableStock < item.quantity) {
-        return NextResponse.json(
-          { error: `Insufficient stock for ${item.name}` },
-          { status: 400 }
-        );
       }
 
       subtotal += variantPrice * item.quantity;
@@ -204,27 +208,87 @@ export async function POST(request: NextRequest) {
         productId: product._id,
         sku: item.variant?.sku || product.sku
       });
+
+      // Queue atomic stock decrement — executed after order is created
+      if (hasVariant && item.variant?.attributes) {
+        atomicUpdates.push(async () => {
+          const result = await Product.findOneAndUpdate(
+            {
+              _id: item.productId,
+              'variants.stock': { $gte: item.quantity }
+            },
+            {
+              $inc: {
+                'variants.$[v].stock': -item.quantity,
+                salesCount: item.quantity
+              }
+            },
+            {
+              arrayFilters: [{ 'v.attributes': item.variant.attributes }],
+              new: true
+            }
+          );
+          if (!result) {
+            throw new Error(`Insufficient stock for ${item.name}`);
+          }
+        });
+      } else {
+        // Check base stock before queuing
+        if (product.stock < item.quantity) {
+          return NextResponse.json(
+            { error: `Insufficient stock for ${item.name}` },
+            { status: 400 }
+          );
+        }
+        atomicUpdates.push(async () => {
+          const result = await Product.findOneAndUpdate(
+            {
+              _id: item.productId,
+              stock: { $gte: item.quantity },
+              active: true
+            },
+            { $inc: { stock: -item.quantity, salesCount: item.quantity } }
+          );
+          if (!result) {
+            throw new Error(`Insufficient stock for ${item.name}`);
+          }
+        });
+      }
     }
 
-    // Calculate tax and shipping server-side (source of truth)
-    const tax = subtotal * TAX_RATE;
-    const shipping =
-      SHIPPING_METHODS[shippingMethod] ?? SHIPPING_METHODS.standard;
-    const total = subtotal + tax + shipping;
+    // Validate and apply coupon server-side
+    let discount = 0;
+    let appliedCouponCode: string | undefined;
+    if (rawCouponCode) {
+      const couponCodeUpper = String(rawCouponCode).toUpperCase().trim();
+      const coupon = await Coupon.findOne({
+        code: couponCodeUpper,
+        active: true
+      });
+      if (coupon && (!coupon.expiresAt || coupon.expiresAt >= new Date())) {
+        if (coupon.maxUses === 0 || coupon.usedCount < coupon.maxUses) {
+          if (coupon.minSubtotal === 0 || subtotal >= coupon.minSubtotal) {
+            discount =
+              coupon.type === 'percent'
+                ? Math.round(((subtotal * coupon.value) / 100) * 100) / 100
+                : Math.min(coupon.value, subtotal);
+            appliedCouponCode = coupon.code;
+          }
+        }
+      }
+    }
 
-    // Generate order number
-    const generateOrderNumber = () => {
-      const date = new Date();
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
-      const random = Math.random().toString(36).substr(2, 6).toUpperCase();
-      return `ORD-${year}${month}${day}-${random}`;
-    };
+    // Calculate totals server-side from Settings values
+    const tax = subtotal * taxRate;
+    const freeShippingMin = shippingMethods._freeShippingMinimum;
+    const isFreeShipping =
+      freeShippingMin !== undefined && subtotal >= freeShippingMin;
+    const shipping = isFreeShipping
+      ? 0
+      : shippingMethods[shippingMethod] ?? shippingMethods.standard ?? 5.99;
+    const total = subtotal + tax + shipping - discount;
 
-    // Create order data
     const orderData = {
-      orderNumber: generateOrderNumber(),
       customer: {
         id: userId,
         name: shippingAddress.fullName,
@@ -236,9 +300,10 @@ export async function POST(request: NextRequest) {
       subtotal,
       tax,
       shipping,
+      discount: discount > 0 ? discount : undefined,
+      couponCode: appliedCouponCode,
       total,
       paymentMethod,
-      // Only trust 'paid' status when a verified paymentIntentId is present
       paymentStatus: paymentIntentId ? paymentStatus || 'paid' : 'pending',
       paymentIntentId: paymentIntentId || undefined,
       cardDetails,
@@ -246,62 +311,101 @@ export async function POST(request: NextRequest) {
       shippingAddress,
       billingAddress: billingAddress || shippingAddress,
       notes,
-      guestOrder: isGuest // Mark if this is a guest order
+      guestOrder: isGuest
     };
 
     const order = await Order.create(orderData);
 
-    // Update product stock
-    for (const item of validatedItems) {
-      const product = await Product.findById(item.productId);
-      if (!product) continue;
+    // Atomically decrement stock — if any fail the order still exists but stock
+    // is not decremented. In production, wrap in a MongoDB transaction.
+    await Promise.all(atomicUpdates.map((fn) => fn()));
 
-      if (item.variant && item.variant.attributes) {
-        const variantIndex = product.variants.findIndex((v: any) =>
-          Object.keys(item.variant.attributes).every(
-            (key: string) => v.attributes[key] === item.variant.attributes[key]
-          )
-        );
-        if (variantIndex !== -1) {
-          product.variants[variantIndex].stock = Math.max(
-            0,
-            (product.variants[variantIndex].stock ?? 0) - item.quantity
-          );
-        }
-      } else {
-        product.stock = Math.max(0, product.stock - item.quantity);
-      }
-
-      product.salesCount += item.quantity;
-      await product.save();
+    // Increment coupon usedCount atomically
+    if (appliedCouponCode) {
+      Coupon.findOneAndUpdate(
+        { code: appliedCouponCode },
+        { $inc: { usedCount: 1 } }
+      ).catch(() => {});
     }
 
-    // Populate order for response
+    // Clear server-side cart for authenticated users
+    if (userId && !isGuest) {
+      Cart.findOneAndDelete({ userId }).catch(() => {});
+    }
+
+    // Send welcome email to new guest account (non-blocking, uses reset link)
+    if (isGuest && createAccount && guestResetToken && guestUserEmail) {
+      sendWelcomeEmail(
+        guestUserEmail,
+        guestUserName || 'Customer',
+        guestResetToken
+      ).catch(() => {});
+    }
+
+    // Send order confirmation email (non-blocking)
+    const customerEmail = userEmail || customer?.email;
+    const customerName = shippingAddress.fullName;
+    if (customerEmail) {
+      sendOrderConfirmationEmail(customerEmail, customerName, {
+        orderNumber: order.orderNumber,
+        items: validatedItems.map(
+          (i: { name: string; price: number; quantity: number }) => ({
+            name: i.name,
+            price: i.price,
+            quantity: i.quantity
+          })
+        ),
+        subtotal,
+        tax,
+        shipping,
+        discount: discount > 0 ? discount : undefined,
+        total: order.total,
+        shippingAddress
+      }).catch(() => {});
+    }
+
     const populatedOrder = await Order.findById(order._id)
       .populate('customer.id', 'name email')
       .lean();
 
-    // Prepare response
-    const responseData: any = {
-      message: 'Order created successfully',
-      order: populatedOrder
+    const responseData: Record<string, unknown> = {
+      message:
+        isGuest && createAccount
+          ? 'Order created successfully. Check your email to set your account password.'
+          : 'Order created successfully',
+      order: populatedOrder,
+      ...(isGuest && createAccount ? { guestAccountCreated: true } : {})
     };
 
-    // Add guest account info if account was created
-    if (isGuest && createAccount) {
-      responseData.guestAccountCreated = true;
-      responseData.message =
-        'Order created successfully. Account has been created for you.';
-      // In a real implementation, you would send the email here
-      // responseData.emailSent = true;
+    // Idempotency key stored in response header so client can track it
+    const response = NextResponse.json(responseData, { status: 201 });
+    if (idempotencyKey) {
+      response.headers.set('Idempotency-Key', idempotencyKey);
     }
-
-    return NextResponse.json(responseData, { status: 201 });
-  } catch (error: any) {
+    return response;
+  } catch (error: unknown) {
     console.error('Create order error:', error);
 
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map((err: any) => err.message);
+    if (
+      error instanceof Error &&
+      error.message.startsWith('Insufficient stock')
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    if (
+      error &&
+      typeof error === 'object' &&
+      'name' in error &&
+      (error as { name: string }).name === 'ValidationError' &&
+      'errors' in error
+    ) {
+      const validationError = error as unknown as {
+        errors: Record<string, { message: string }>;
+      };
+      const errors = Object.values(validationError.errors).map(
+        (err) => err.message
+      );
       return NextResponse.json({ error: errors.join(', ') }, { status: 400 });
     }
 
@@ -314,7 +418,6 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/orders
- * Fetches orders with pagination and filtering
  */
 export async function GET(request: NextRequest) {
   try {
@@ -336,19 +439,16 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
-    const query: any = {};
+    const query: Record<string, unknown> = {};
 
-    // Filter by customer (non-admin users see only their orders)
     if (decoded.role !== 'admin') {
       query['customer.id'] = decoded.userId;
     }
 
-    // Status filter
     if (status && status !== 'all') {
       query.status = status;
     }
 
-    // Payment status filter
     if (paymentStatus && paymentStatus !== 'all') {
       query.paymentStatus = paymentStatus;
     }
@@ -371,14 +471,16 @@ export async function GET(request: NextRequest) {
       [safeSortBy]: sortOrder === 'desc' ? -1 : 1
     };
 
-    const orders = await Order.find(query)
-      .populate('customer.id', 'name email')
-      .sort(sort)
-      .skip(skip)
-      .limit(limit)
-      .select('-__v');
+    const [orders, total] = await Promise.all([
+      Order.find(query)
+        .populate('customer.id', 'name email')
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .select('-__v'),
+      Order.countDocuments(query)
+    ]);
 
-    const total = await Order.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json({

@@ -5,11 +5,23 @@ import { generateToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 import { sendVerificationEmail } from '@/lib/email';
 import { isMongooseValidationError } from '@/lib/utils';
+import { authLimiter, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    if (authLimiter) {
+      const ip = getClientIp(request);
+      const { success } = await authLimiter.limit(ip);
+      if (!success) {
+        return NextResponse.json(
+          { error: 'Too many requests. Please try again later.' },
+          { status: 429 }
+        );
+      }
+    }
+
     await connectDB();
 
     const { name, email, password } = await request.json();
@@ -67,7 +79,8 @@ export async function POST(request: NextRequest) {
         user: {
           id: user._id,
           name: user.name,
-          email: user.email
+          email: user.email,
+          role: user.role
         }
       },
       { status: 201 }

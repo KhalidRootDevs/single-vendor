@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useState,
   useEffect,
@@ -30,73 +31,154 @@ const WishlistContext = createContext<WishlistContextType | undefined>(
   undefined
 );
 
+async function isLoggedIn(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'include' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function WishlistProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
 
-  // Load wishlist from localStorage on initial render
+  // Load wishlist: from server if logged in, otherwise from localStorage
   useEffect(() => {
-    const storedWishlist = localStorage.getItem('wishlist');
-    if (storedWishlist) {
-      try {
-        setItems(JSON.parse(storedWishlist));
-      } catch (error) {
-        console.error('Failed to parse wishlist from localStorage:', error);
+    let cancelled = false;
+
+    async function load() {
+      const loggedIn = await isLoggedIn();
+      if (cancelled) return;
+      setAuthenticated(loggedIn);
+
+      if (loggedIn) {
+        try {
+          const res = await fetch('/api/user/wishlist', {
+            credentials: 'include'
+          });
+          if (res.ok) {
+            const data = await res.json();
+            // Server returns product IDs only — merge with localStorage items that have full data
+            const localRaw = localStorage.getItem('wishlist');
+            const localItems: WishlistItem[] = localRaw
+              ? JSON.parse(localRaw)
+              : [];
+            const serverIds: string[] = data.wishlist.map(String);
+            // Keep local items that are on the server list, plus any not yet synced
+            const merged = localItems.filter((i) => serverIds.includes(i.id));
+            // Sync local items not yet on server
+            const localOnlyIds = localItems
+              .filter((i) => !serverIds.includes(i.id))
+              .map((i) => i.id);
+            for (const pid of localOnlyIds) {
+              fetch('/api/user/wishlist', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId: pid })
+              }).catch(() => {});
+            }
+            if (!cancelled) setItems(merged);
+          }
+        } catch {
+          const stored = localStorage.getItem('wishlist');
+          if (stored && !cancelled) setItems(JSON.parse(stored));
+        }
+      } else {
+        const stored = localStorage.getItem('wishlist');
+        if (stored && !cancelled) {
+          try {
+            setItems(JSON.parse(stored));
+          } catch {
+            // ignore
+          }
+        }
       }
+
+      if (!cancelled) setIsInitialized(true);
     }
-    setIsInitialized(true);
+
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Save wishlist to localStorage whenever it changes
+  // Persist to localStorage whenever items change
   useEffect(() => {
     if (isInitialized) {
       localStorage.setItem('wishlist', JSON.stringify(items));
     }
   }, [items, isInitialized]);
 
-  // Add item to wishlist
-  const addItem = (newItem: WishlistItem) => {
-    if (items.some((item) => item.id === newItem.id)) {
+  const addItem = useCallback(
+    (newItem: WishlistItem) => {
+      if (items.some((item) => item.id === newItem.id)) {
+        toast({
+          title: 'Already in wishlist',
+          description: `${newItem.name} is already in your wishlist.`
+        });
+        return;
+      }
+
+      setItems((prev) => [...prev, newItem]);
+
+      if (authenticated) {
+        fetch('/api/user/wishlist', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId: newItem.id })
+        }).catch(() => {});
+      }
+
       toast({
-        title: 'Already in wishlist',
-        description: `${newItem.name} is already in your wishlist.`
+        title: 'Added to wishlist',
+        description: `${newItem.name} has been added to your wishlist.`
       });
-      return;
-    }
+    },
+    [items, authenticated]
+  );
 
-    setItems((prev) => [...prev, newItem]);
-    toast({
-      title: 'Added to wishlist',
-      description: `${newItem.name} has been added to your wishlist.`
-    });
-  };
+  const removeItem = useCallback(
+    (id: string) => {
+      const item = items.find((i) => i.id === id);
+      setItems((prev) => prev.filter((i) => i.id !== id));
 
-  // Remove item from wishlist
-  const removeItem = (id: string) => {
-    const item = items.find((item) => item.id === id);
-    setItems((prev) => prev.filter((item) => item.id !== id));
+      if (authenticated) {
+        fetch('/api/user/wishlist', {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId: id })
+        }).catch(() => {});
+      }
 
-    if (item) {
-      toast({
-        title: 'Removed from wishlist',
-        description: `${item.name} has been removed from your wishlist.`
-      });
-    }
-  };
+      if (item) {
+        toast({
+          title: 'Removed from wishlist',
+          description: `${item.name} has been removed from your wishlist.`
+        });
+      }
+    },
+    [items, authenticated]
+  );
 
-  // Check if item is in wishlist
-  const isInWishlist = (id: string) => {
-    return items.some((item) => item.id === id);
-  };
+  const isInWishlist = useCallback(
+    (id: string) => items.some((item) => item.id === id),
+    [items]
+  );
 
-  // Clear wishlist
-  const clearWishlist = () => {
+  const clearWishlist = useCallback(() => {
     setItems([]);
     toast({
       title: 'Wishlist cleared',
       description: 'All items have been removed from your wishlist.'
     });
-  };
+  }, []);
 
   return (
     <WishlistContext.Provider

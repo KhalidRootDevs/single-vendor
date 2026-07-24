@@ -4,6 +4,7 @@ import { Product } from '@/models/Product';
 import { verifyToken } from '@/lib/auth';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/cloudinary';
 import connectDB from '@/lib/database';
+import { logAuditEvent } from '@/lib/audit';
 import {
   extractPublicIdFromUrl,
   isMongooseValidationError,
@@ -230,6 +231,16 @@ export async function PUT(
       { new: true, runValidators: true }
     ).populate('categoryId', 'name slug');
 
+    logAuditEvent({
+      adminId: decodedPut.userId,
+      adminEmail: decodedPut.email,
+      action: 'UPDATE_PRODUCT',
+      resourceType: 'Product',
+      resourceId: params.id,
+      after: updateData,
+      ip: request.headers.get('x-forwarded-for') || undefined
+    }).catch(() => {});
+
     return NextResponse.json({
       message: 'Product updated successfully',
       product: updatedProduct
@@ -287,6 +298,16 @@ export async function DELETE(
     }
 
     await Product.findByIdAndDelete(params.id);
+
+    logAuditEvent({
+      adminId: decodedDel.userId,
+      adminEmail: decodedDel.email,
+      action: 'DELETE_PRODUCT',
+      resourceType: 'Product',
+      resourceId: params.id,
+      before: { name: product.name, sku: product.sku },
+      ip: request.headers.get('x-forwarded-for') || undefined
+    }).catch(() => {});
 
     return NextResponse.json({
       message: 'Product deleted successfully'
