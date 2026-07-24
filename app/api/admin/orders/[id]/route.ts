@@ -5,6 +5,7 @@ import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 import { isMongooseValidationError } from '@/lib/utils';
 import { logAuditEvent } from '@/lib/audit';
+import { restoreStock, orderItemsToRestore } from '@/lib/inventory';
 import {
   sendShippingConfirmationEmail,
   sendOrderCancelledEmail
@@ -73,6 +74,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
+    const originalStatus = order.status;
+
     // Update order status if provided
     if (status && status !== order.status) {
       order.status = status;
@@ -116,6 +119,17 @@ export async function PATCH(
     const previousStatus = order.isModified('status')
       ? order.get('status', null, { getters: false })
       : null;
+
+    // Restock inventory when an order is cancelled (once).
+    if (
+      order.status === 'cancelled' &&
+      originalStatus !== 'cancelled' &&
+      !order.stockRestored
+    ) {
+      await restoreStock(orderItemsToRestore(order.items));
+      order.stockRestored = true;
+    }
+
     await order.save();
 
     // Send transactional emails on status transitions
@@ -267,6 +281,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
+    const wasCancelled = order.status === 'cancelled';
+
     // Update order status to cancelled
     order.status = 'cancelled';
 
@@ -277,6 +293,12 @@ export async function DELETE(
       description: reason || 'Order was cancelled by admin',
       updatedBy: new mongoose.Types.ObjectId(decoded.userId)
     });
+
+    // Restock inventory for a freshly cancelled order (once).
+    if (!wasCancelled && !order.stockRestored) {
+      await restoreStock(orderItemsToRestore(order.items));
+      order.stockRestored = true;
+    }
 
     await order.save();
 

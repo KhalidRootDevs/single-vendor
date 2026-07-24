@@ -59,6 +59,8 @@ export interface IOrder extends Document {
   items: IOrderItem[];
   timeline: ITimelineEvent[];
   notes?: string;
+  /** True once inventory has been restocked (on cancellation). Prevents double restore. */
+  stockRestored?: boolean;
   shippingAddress?: {
     fullName: string;
     address: string;
@@ -317,6 +319,10 @@ const orderSchema = new Schema<IOrder>(
       type: String,
       trim: true,
       maxlength: [1000, 'Notes cannot exceed 1000 characters']
+    },
+    stockRestored: {
+      type: Boolean,
+      default: false
     },
     shippingAddress: {
       fullName: { type: String, trim: true },

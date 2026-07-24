@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/database';
 import { Return } from '@/models/Return';
 import { Order } from '@/models/Order';
+import { restoreStock } from '@/lib/inventory';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,19 +36,31 @@ export async function PATCH(
     );
   }
 
-  const updateData: Record<string, unknown> = { status };
-  if (adminNotes !== undefined) updateData.adminNotes = adminNotes;
-  if (status === 'approved' && refundAmount !== undefined) {
-    updateData.refundAmount = Number(refundAmount);
-  }
-
-  const returnRequest = await Return.findByIdAndUpdate(params.id, updateData, {
-    new: true
-  });
+  const returnRequest = await Return.findById(params.id);
 
   if (!returnRequest) {
     return NextResponse.json({ error: 'Return not found' }, { status: 404 });
   }
+
+  returnRequest.status = status;
+  if (adminNotes !== undefined) returnRequest.adminNotes = adminNotes;
+  if (status === 'approved' && refundAmount !== undefined) {
+    returnRequest.refundAmount = Number(refundAmount);
+  }
+
+  // Restock the returned items once the return is approved (goods accepted back).
+  if (status === 'approved' && !returnRequest.stockRestored) {
+    await restoreStock(
+      returnRequest.items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        variantAttributes: item.variantAttributes ?? null
+      }))
+    );
+    returnRequest.stockRestored = true;
+  }
+
+  await returnRequest.save();
 
   return NextResponse.json({
     message: `Return ${status}`,

@@ -9,6 +9,7 @@ import {
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
 import { isMongooseValidationError } from '@/lib/utils';
+import { restoreStock, orderItemsToRestore } from '@/lib/inventory';
 
 export const dynamic = 'force-dynamic';
 
@@ -265,6 +266,12 @@ export async function DELETE(
       }`,
       updatedBy: new mongoose.Types.ObjectId(decoded.userId)
     });
+
+    // Return the reserved inventory to stock (once).
+    if (!order.stockRestored) {
+      await restoreStock(orderItemsToRestore(order.items));
+      order.stockRestored = true;
+    }
 
     await order.save();
 

@@ -6,6 +6,8 @@ export interface IReturnItem {
   quantity: number;
   price: number;
   reason: string;
+  /** Variant attributes of the returned line, used to restock the right variant. */
+  variantAttributes?: Record<string, string>;
 }
 
 export interface IReturn extends Document {
@@ -26,6 +28,8 @@ export interface IReturn extends Document {
   refundAmount: number;
   refundId?: string;
   adminNotes?: string;
+  /** True once inventory has been restocked (on approval). Prevents double restore. */
+  stockRestored?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,7 +40,8 @@ const returnItemSchema = new Schema<IReturnItem>(
     name: { type: String, required: true, trim: true },
     quantity: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },
-    reason: { type: String, trim: true, default: '' }
+    reason: { type: String, trim: true, default: '' },
+    variantAttributes: { type: Schema.Types.Mixed }
   },
   { _id: false }
 );
@@ -105,7 +110,8 @@ const returnSchema = new Schema<IReturn>(
       min: 0
     },
     refundId: { type: String, trim: true },
-    adminNotes: { type: String, trim: true }
+    adminNotes: { type: String, trim: true },
+    stockRestored: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

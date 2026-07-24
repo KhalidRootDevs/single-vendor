@@ -105,12 +105,30 @@ export async function POST(request: NextRequest) {
     0
   );
 
+  // Capture each returned line's variant from the order so it can be restocked
+  // against the correct variant when the return is approved.
+  const enrichedItems = items.map(
+    (item: {
+      productId: string;
+      variantAttributes?: Record<string, string>;
+    }) => {
+      const orderItem = order.items.find(
+        (oi) => oi.productId?.toString() === String(item.productId)
+      );
+      return {
+        ...item,
+        variantAttributes:
+          item.variantAttributes ?? orderItem?.variant?.attributes
+      };
+    }
+  );
+
   const returnRequest = await Return.create({
     orderId,
     orderNumber: order.orderNumber,
     userId: decoded.userId,
     userEmail: order.customer.email,
-    items,
+    items: enrichedItems,
     reason,
     description: String(description).trim(),
     status: 'pending',
