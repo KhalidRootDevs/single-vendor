@@ -341,8 +341,10 @@ const orderSchema = new Schema<IOrder>(
   }
 );
 
-// Consolidated order number generation pre-save hook
-orderSchema.pre<IOrder>('save', async function (next) {
+// Order number generation — must run on `validate`, not `save`, because Mongoose
+// runs schema validation BEFORE pre('save') hooks. Since `orderNumber` is a
+// required field, generating it here ensures it exists before validation runs.
+orderSchema.pre<IOrder>('validate', async function (next) {
   if (this.isNew && !this.orderNumber) {
     let orderNumber: string;
     let attempts = 0;

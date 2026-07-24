@@ -1,3 +1,15 @@
+const isDev = process.env.NODE_ENV !== 'production';
+
+// Next.js dev mode (Fast Refresh + webpack HMR) evaluates code via eval(),
+// which requires 'unsafe-eval'. Keep it out of the production CSP.
+const scriptSrc = [
+  "script-src 'self' 'unsafe-inline'",
+  isDev ? "'unsafe-eval'" : '',
+  'https://js.stripe.com https://www.googletagmanager.com https://accounts.google.com'
+]
+  .filter(Boolean)
+  .join(' ');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -45,7 +57,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://js.stripe.com https://www.googletagmanager.com https://accounts.google.com",
+              scriptSrc,
               "style-src 'self' 'unsafe-inline' https://accounts.google.com",
               'frame-src https://js.stripe.com https://accounts.google.com',
               "img-src 'self' data: blob: https://res.cloudinary.com https://lh3.googleusercontent.com",
