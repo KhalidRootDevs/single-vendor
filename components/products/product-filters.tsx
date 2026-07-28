@@ -99,6 +99,44 @@ export function ProductFilters({
         </form>
       </div>
 
+      {/* Price Range */}
+      <div>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between"
+          onClick={() => toggleSection('price')}
+        >
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Price Range
+          </h3>
+          {expandedFilters.price ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+        {expandedFilters.price && (
+          <div className="mt-4 px-1">
+            <Slider
+              value={priceRange}
+              max={priceMax}
+              step={Math.max(1, Math.floor(priceMax / 100))}
+              onValueChange={onPriceChange}
+              className="mb-4"
+            />
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">
+                ${priceRange[0].toLocaleString()}
+              </span>
+              <span className="text-muted-foreground">—</span>
+              <span className="font-medium">
+                ${priceRange[1].toLocaleString()}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Categories */}
       <div>
         <button
@@ -194,44 +232,6 @@ export function ProductFilters({
           )}
         </div>
       )}
-
-      {/* Price Range */}
-      <div>
-        <button
-          type="button"
-          className="flex w-full items-center justify-between"
-          onClick={() => toggleSection('price')}
-        >
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Price Range
-          </h3>
-          {expandedFilters.price ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          )}
-        </button>
-        {expandedFilters.price && (
-          <div className="mt-4 px-1">
-            <Slider
-              value={priceRange}
-              max={priceMax}
-              step={Math.max(1, Math.floor(priceMax / 100))}
-              onValueChange={onPriceChange}
-              className="mb-4"
-            />
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">
-                ${priceRange[0].toLocaleString()}
-              </span>
-              <span className="text-muted-foreground">—</span>
-              <span className="font-medium">
-                ${priceRange[1].toLocaleString()}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Rating */}
       <div>
@@ -348,11 +348,15 @@ export function ProductFilters({
         </div>
       </div>
 
-      {/* Desktop sidebar */}
+      {/* Desktop sidebar — scrolls independently of the product grid, so a long
+          category/brand list never pushes the action buttons out of reach. */}
       <div className="hidden w-64 flex-shrink-0 md:block">
-        <div className="sticky top-24 space-y-6">
-          {filterContent}
-          <div className="flex flex-col gap-2 pt-2">
+        <div className="sticky top-24 flex max-h-[calc(100vh-7rem)] flex-col">
+          {/* min-h-0 lets this shrink below its content height so it can scroll */}
+          <div className="min-h-0 flex-1 overflow-y-auto pb-4 pr-2">
+            {filterContent}
+          </div>
+          <div className="flex flex-col gap-2 border-t bg-background pt-4">
             <Button className="w-full" onClick={onApplyFilters}>
               Apply Filters
             </Button>
