@@ -411,14 +411,6 @@ export async function GET(request: NextRequest) {
       orders: hourMap.get(i) ?? 0
     }));
 
-    // Top products pie (share of this month's sales)
-    const totalCurrentSales =
-      topProductsResult.reduce((s, p) => s + p.sales, 0) || 1;
-    const topProductsPie = topProductsResult.map((p) => ({
-      name: p.name,
-      value: Math.round((p.sales / totalCurrentSales) * 100)
-    }));
-
     // Customer segments
     const seg = customerSegmentsResult[0] ?? {
       newCount: 0,
@@ -484,8 +476,7 @@ export async function GET(request: NextRequest) {
       },
       charts: {
         revenueByMonth,
-        ordersByHour,
-        topProductsPie
+        ordersByHour
       },
       lists: {
         topProducts: topProductsResult,

@@ -19,7 +19,7 @@ import {
 import { Container } from '@/components/ui/container';
 import { Chart } from '@/components/ui/chart';
 import { useState } from 'react';
-import { useDashboard } from '@/hooks/use-dashboard';
+import { useDashboard, type TopProduct } from '@/hooks/use-dashboard';
 import { Skeleton } from '@/components/ui/skeleton';
 
 function StatCardSkeleton() {
@@ -55,12 +55,84 @@ function TrendLabel({ pct }: { pct: number }) {
   );
 }
 
+const currency = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0
+});
+
+function TopProductsList({ products }: { products: TopProduct[] }) {
+  // Bars are relative to the leader, so the top seller always fills the track
+  // and the rest read as a share of it.
+  const max = Math.max(...products.map((p) => p.sales), 1);
+
+  return (
+    <ol className="space-y-3">
+      {products.map((product, index) => {
+        const up = product.growth >= 0;
+
+        return (
+          <li key={`${product.name}-${index}`} className="flex gap-3">
+            <span className="w-4 shrink-0 text-sm tabular-nums text-muted-foreground">
+              {index + 1}
+            </span>
+
+            {/* min-w-0 lets the name truncate instead of stretching the row */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span
+                  className="truncate text-sm font-medium"
+                  title={product.name}
+                >
+                  {product.name}
+                </span>
+                <span className="shrink-0 text-sm font-semibold tabular-nums">
+                  {product.sales.toLocaleString()}
+                </span>
+              </div>
+
+              <div
+                className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                aria-hidden
+              >
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${(product.sales / max) * 100}%` }}
+                />
+              </div>
+
+              <div className="mt-1 flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                <span className="tabular-nums">
+                  {currency.format(product.revenue)}
+                </span>
+                <span
+                  className={`flex shrink-0 items-center tabular-nums ${
+                    up ? 'text-green-500' : 'text-red-500'
+                  }`}
+                >
+                  {up ? (
+                    <ArrowUp className="mr-0.5 h-3 w-3" />
+                  ) : (
+                    <ArrowDown className="mr-0.5 h-3 w-3" />
+                  )}
+                  {Math.abs(product.growth)}%
+                </span>
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const { data, isLoading, error } = useDashboard('30d');
 
   const s = data?.stats;
   const charts = data?.charts;
+  const topProducts = data?.lists?.topProducts;
 
   return (
     <Container>
@@ -218,38 +290,22 @@ export default function AdminDashboard() {
                 <CardHeader>
                   <CardTitle>Top Products</CardTitle>
                   <CardDescription>
-                    Best selling products this month
+                    Units sold this month, best first
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[300px]">
-                    {isLoading ? (
-                      <Skeleton className="h-full w-full" />
-                    ) : (charts?.topProductsPie?.length ?? 0) > 0 ? (
-                      <Chart
-                        type="pie"
-                        data={charts?.topProductsPie ?? []}
-                        options={{
-                          dataKey: 'value',
-                          datasets: [
-                            {
-                              backgroundColor: [
-                                'hsl(var(--primary))',
-                                'hsl(var(--primary) / 0.8)',
-                                'hsl(var(--primary) / 0.6)',
-                                'hsl(var(--primary) / 0.4)',
-                                'hsl(var(--primary) / 0.2)'
-                              ]
-                            }
-                          ]
-                        }}
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                        No sales data yet
-                      </div>
-                    )}
-                  </div>
+                  {/* No fixed height — five rows land a touch over 300px and a
+                      scrollbar for those few pixels looks worse than the extra
+                      height. The grid stretches both cards to match anyway. */}
+                  {isLoading ? (
+                    <Skeleton className="h-[300px] w-full" />
+                  ) : (topProducts?.length ?? 0) > 0 ? (
+                    <TopProductsList products={topProducts ?? []} />
+                  ) : (
+                    <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+                      No sales data yet
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

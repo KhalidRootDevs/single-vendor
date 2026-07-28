@@ -33,11 +33,6 @@ export interface HourlyPoint {
   orders: number;
 }
 
-export interface PiePoint {
-  name: string;
-  value: number;
-}
-
 export interface TopProduct {
   name: string;
   sales: number;
@@ -67,7 +62,6 @@ export interface DashboardData {
   charts: {
     revenueByMonth: MonthlyPoint[];
     ordersByHour: HourlyPoint[];
-    topProductsPie: PiePoint[];
   };
   lists: {
     topProducts: TopProduct[];
