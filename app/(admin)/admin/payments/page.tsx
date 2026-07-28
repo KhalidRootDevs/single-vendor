@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -26,173 +26,194 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Eye, Search, Download } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/use-toast';
+import { Eye, Search, Download, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { Container } from '@/components/ui/container';
 
-// Mock payment data
-const payments = [
-  {
-    id: 'PAY-001',
-    transactionId: 'txn_1234567890abcdef',
-    orderId: 'ORD-001',
-    customer: 'John Doe',
-    date: '2023-06-15T14:35:12Z',
-    amount: 159.98,
-    fee: 4.95,
-    net: 155.03,
-    method: 'Credit Card',
-    cardType: 'Visa',
-    last4: '4242',
-    status: 'Completed'
-  },
-  {
-    id: 'PAY-002',
-    transactionId: 'txn_abcdef1234567890',
-    orderId: 'ORD-002',
-    customer: 'Jane Smith',
-    date: '2023-06-14T10:16:05Z',
-    amount: 79.99,
-    fee: 2.55,
-    net: 77.44,
-    method: 'PayPal',
-    paypalEmail: 'jane.smith@example.com',
-    status: 'Completed'
-  },
-  {
-    id: 'PAY-003',
-    transactionId: 'txn_xyz9876543210abc',
-    orderId: 'ORD-003',
-    customer: 'Robert Johnson',
-    date: '2023-06-14T16:47:10Z',
-    amount: 249.97,
-    fee: 7.75,
-    net: 242.22,
-    method: 'Credit Card',
-    cardType: 'Mastercard',
-    last4: '5678',
-    status: 'Completed'
-  },
-  {
-    id: 'PAY-004',
-    transactionId: 'txn_pending123456',
-    orderId: 'ORD-008',
-    customer: 'Jennifer Taylor',
-    date: '2023-06-10T09:22:33Z',
-    amount: 149.97,
-    fee: 0,
-    net: 149.97,
-    method: 'Cash on Delivery',
-    status: 'Pending'
-  },
-  {
-    id: 'PAY-005',
-    transactionId: 'txn_failed789xyz',
-    orderId: 'ORD-009',
-    customer: 'Michael Brown',
-    date: '2023-06-09T15:45:20Z',
-    amount: 89.99,
-    fee: 0,
-    net: 0,
-    method: 'Credit Card',
-    cardType: 'Visa',
-    last4: '1234',
-    status: 'Failed'
-  },
-  {
-    id: 'PAY-006',
-    transactionId: 'txn_refund456def',
-    orderId: 'ORD-005',
-    customer: 'Michael Wilson',
-    date: '2023-06-12T11:30:15Z',
-    amount: -89.98,
-    fee: -2.79,
-    net: -87.19,
-    method: 'Credit Card',
-    cardType: 'Visa',
-    last4: '9876',
-    status: 'Refunded'
-  },
-  {
-    id: 'PAY-007',
-    transactionId: 'txn_processing789',
-    orderId: 'ORD-010',
-    customer: 'Sarah Davis',
-    date: '2023-06-08T14:12:45Z',
-    amount: 199.99,
-    fee: 6.2,
-    net: 193.79,
-    method: 'PayPal',
-    paypalEmail: 'sarah.davis@example.com',
-    status: 'Processing'
-  },
-  {
-    id: 'PAY-008',
-    transactionId: 'txn_completed123abc',
-    orderId: 'ORD-006',
-    customer: 'Sarah Brown',
-    date: '2023-06-12T08:45:30Z',
-    amount: 199.99,
-    fee: 6.2,
-    net: 193.79,
-    method: 'PayPal',
-    paypalEmail: 'sarah.brown@example.com',
-    status: 'Completed'
-  }
-];
+interface Payment {
+  _id: string;
+  orderNumber: string;
+  transactionId: string | null;
+  customer: { name: string; email: string };
+  date: string;
+  amount: number;
+  refundedAmount: number | null;
+  paymentMethod: string;
+  paymentStatus: string;
+  cardDetails: { brand: string; last4: string } | null;
+  orderStatus: string;
+}
 
-// Status badge colors
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'Completed':
-      return 'bg-green-100 text-green-800';
-    case 'Processing':
-      return 'bg-blue-100 text-blue-800';
-    case 'Pending':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'Failed':
-      return 'bg-red-100 text-red-800';
-    case 'Refunded':
-      return 'bg-purple-100 text-purple-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
-  }
+interface Totals {
+  collected: number;
+  refunded: number;
+  net: number;
+}
+
+const STATUS_STYLES: Record<string, string> = {
+  paid: 'bg-green-100 text-green-800',
+  pending: 'bg-yellow-100 text-yellow-800',
+  failed: 'bg-red-100 text-red-800',
+  refunded: 'bg-purple-100 text-purple-800'
 };
 
+const STATUS_LABEL: Record<string, string> = {
+  paid: 'Paid',
+  pending: 'Pending',
+  failed: 'Failed',
+  refunded: 'Refunded'
+};
+
+const METHOD_LABEL: Record<string, string> = {
+  credit_card: 'Credit Card',
+  debit_card: 'Debit Card',
+  paypal: 'PayPal',
+  bank_transfer: 'Bank Transfer',
+  cash_on_delivery: 'Cash on Delivery'
+};
+
+const money = (n: number) =>
+  `$${n.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+
 export default function PaymentsPage() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [methodFilter, setMethodFilter] = useState('all');
+  const [page, setPage] = useState(1);
 
-  // Filter payments based on search and filters
-  const filteredPayments = payments.filter((payment) => {
-    const matchesSearch =
-      payment.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      payment.transactionId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      payment.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      payment.customer.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesStatus =
-      statusFilter === 'all' || payment.status === statusFilter;
-    const matchesMethod =
-      methodFilter === 'all' || payment.method === methodFilter;
-
-    return matchesSearch && matchesStatus && matchesMethod;
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [totals, setTotals] = useState<Totals>({
+    collected: 0,
+    refunded: 0,
+    net: 0
   });
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
-  // Calculate totals
-  const totalAmount = filteredPayments.reduce(
-    (sum, payment) => sum + payment.amount,
-    0
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [searchInput]);
+
+  const buildParams = useCallback(
+    (overrides: Record<string, string> = {}) => {
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (methodFilter !== 'all') params.set('method', methodFilter);
+      params.set('page', String(page));
+      Object.entries(overrides).forEach(([k, v]) => params.set(k, v));
+      return params;
+    },
+    [search, statusFilter, methodFilter, page]
   );
-  const totalFees = filteredPayments.reduce(
-    (sum, payment) => sum + payment.fee,
-    0
-  );
-  const totalNet = filteredPayments.reduce(
-    (sum, payment) => sum + payment.net,
-    0
-  );
+
+  const fetchPayments = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/payments?${buildParams()}`, {
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to load payments');
+
+      setPayments(data.payments);
+      setTotals(data.totals);
+      setTotal(data.pagination.total);
+      setTotalPages(data.pagination.totalPages);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load payments');
+      setPayments([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [buildParams]);
+
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
+
+  const exportReport = async () => {
+    setIsExporting(true);
+    try {
+      // Export everything matching the current filters, not just this page.
+      const res = await fetch(
+        `/api/admin/payments?${buildParams({ page: '1', limit: '500' })}`,
+        { credentials: 'include' }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Export failed');
+
+      const rows: string[][] = [
+        [
+          'Order',
+          'Transaction ID',
+          'Customer',
+          'Email',
+          'Date',
+          'Amount',
+          'Refunded',
+          'Method',
+          'Status'
+        ],
+        ...data.payments.map((p: Payment) => [
+          p.orderNumber,
+          p.transactionId ?? '',
+          p.customer.name,
+          p.customer.email,
+          new Date(p.date).toISOString(),
+          p.amount.toFixed(2),
+          p.refundedAmount ? p.refundedAmount.toFixed(2) : '',
+          METHOD_LABEL[p.paymentMethod] ?? p.paymentMethod,
+          STATUS_LABEL[p.paymentStatus] ?? p.paymentStatus
+        ])
+      ];
+
+      const csv = rows
+        .map((row) =>
+          row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+        )
+        .join('\n');
+
+      const url = URL.createObjectURL(
+        new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      );
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `payments-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Report exported',
+        description: `${data.payments.length} transactions written to CSV.`
+      });
+    } catch (err) {
+      toast({
+        title: 'Export failed',
+        description: err instanceof Error ? err.message : 'Unexpected error',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <Container>
@@ -204,45 +225,76 @@ export default function PaymentsPage() {
               View and manage all payment transactions.
             </p>
           </div>
-          <Button variant="outline">
+          <Button
+            variant="outline"
+            onClick={exportReport}
+            disabled={isExporting || isLoading}
+          >
             <Download className="mr-2 h-4 w-4" />
-            Export Report
+            {isExporting ? 'Exporting...' : 'Export Report'}
           </Button>
         </div>
 
-        {/* Summary Cards */}
+        {error && (
+          <div className="flex items-center justify-between rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <span>{error}</span>
+            <Button variant="outline" size="sm" onClick={fetchPayments}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {/* Totals cover every transaction matching the current filters, not
+            just the visible page. */}
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Amount
-              </CardTitle>
+              <CardTitle className="text-sm font-medium">Collected</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                ${totalAmount.toFixed(2)}
-              </div>
+              {isLoading ? (
+                <Skeleton className="h-8 w-32" />
+              ) : (
+                <div className="text-2xl font-bold">
+                  {money(totals.collected)}
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
-                {filteredPayments.length} transactions
+                {total} transaction{total === 1 ? '' : 's'} matched
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Fees</CardTitle>
+              <CardTitle className="text-sm font-medium">Refunded</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${totalFees.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">Processing fees</p>
+              {isLoading ? (
+                <Skeleton className="h-8 w-32" />
+              ) : (
+                <div className="text-2xl font-bold">
+                  {money(totals.refunded)}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Returned to customers
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Net Amount</CardTitle>
+              <CardTitle className="text-sm font-medium">Net</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${totalNet.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">After fees</p>
+              {isLoading ? (
+                <Skeleton className="h-8 w-32" />
+              ) : (
+                <div className="text-2xl font-bold">{money(totals.net)}</div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Collected less refunds
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -256,119 +308,164 @@ export default function PaymentsPage() {
           </CardHeader>
           <CardContent>
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex w-full max-w-sm items-center space-x-2">
+              <div className="relative w-full max-w-sm">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by ID, transaction, order, or customer..."
-                  className="h-9"
+                  placeholder="Search order, customer, or transaction..."
+                  className="h-9 pl-8"
                   type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                 />
-                <Button type="submit" size="sm" className="h-9">
-                  <Search className="h-4 w-4" />
-                  <span className="sr-only">Search</span>
-                </Button>
               </div>
               <div className="flex items-center gap-2">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(v) => {
+                    setStatusFilter(v);
+                    setPage(1);
+                  }}
+                >
                   <SelectTrigger className="h-9 w-[160px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="Completed">Completed</SelectItem>
-                    <SelectItem value="Processing">Processing</SelectItem>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Failed">Failed</SelectItem>
-                    <SelectItem value="Refunded">Refunded</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="refunded">Refunded</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={methodFilter} onValueChange={setMethodFilter}>
+                <Select
+                  value={methodFilter}
+                  onValueChange={(v) => {
+                    setMethodFilter(v);
+                    setPage(1);
+                  }}
+                >
                   <SelectTrigger className="h-9 w-[180px]">
                     <SelectValue placeholder="Payment Method" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Methods</SelectItem>
-                    <SelectItem value="Credit Card">Credit Card</SelectItem>
-                    <SelectItem value="PayPal">PayPal</SelectItem>
-                    <SelectItem value="Cash on Delivery">
+                    <SelectItem value="credit_card">Credit Card</SelectItem>
+                    <SelectItem value="debit_card">Debit Card</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="cash_on_delivery">
                       Cash on Delivery
                     </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Payment ID</TableHead>
-                    <TableHead>Order ID</TableHead>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Transaction</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Amount</TableHead>
-                    <TableHead>Fee</TableHead>
-                    <TableHead>Net</TableHead>
                     <TableHead>Method</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPayments.length === 0 ? (
+                  {isLoading ? (
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell colSpan={8}>
+                          <Skeleton className="h-6 w-full" />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : payments.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={10}
+                        colSpan={8}
                         className="py-8 text-center text-muted-foreground"
                       >
                         No payments found matching your filters.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredPayments.map((payment) => (
-                      <TableRow key={payment.id}>
+                    payments.map((payment) => (
+                      <TableRow key={payment._id}>
                         <TableCell className="font-medium">
-                          {payment.id}
-                        </TableCell>
-                        <TableCell>
                           <Link
-                            href={`/admin/orders/${payment.orderId}`}
+                            href={`/admin/orders/${payment._id}`}
                             className="text-primary hover:underline"
                           >
-                            {payment.orderId}
+                            {payment.orderNumber}
                           </Link>
                         </TableCell>
-                        <TableCell>{payment.customer}</TableCell>
-                        <TableCell>
-                          {new Date(payment.date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell
-                          className={payment.amount < 0 ? 'text-red-600' : ''}
-                        >
-                          ${Math.abs(payment.amount).toFixed(2)}
-                          {payment.amount < 0 && ' (Refund)'}
-                        </TableCell>
-                        <TableCell>${payment.fee.toFixed(2)}</TableCell>
-                        <TableCell className="font-medium">
-                          ${payment.net.toFixed(2)}
+                        <TableCell className="max-w-[160px]">
+                          {payment.transactionId ? (
+                            <span
+                              className="block truncate font-mono text-xs"
+                              title={payment.transactionId}
+                            >
+                              {payment.transactionId}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              —
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span>{payment.method}</span>
-                            {payment.cardType && payment.last4 && (
+                            <span>{payment.customer.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {payment.customer.email}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(payment.date).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span>{money(payment.amount)}</span>
+                            {payment.refundedAmount ? (
+                              <span className="text-xs text-red-600">
+                                −{money(payment.refundedAmount)} refunded
+                              </span>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span>
+                              {METHOD_LABEL[payment.paymentMethod] ??
+                                payment.paymentMethod}
+                            </span>
+                            {payment.cardDetails && (
                               <span className="text-xs text-muted-foreground">
-                                {payment.cardType} ••{payment.last4}
+                                {payment.cardDetails.brand} ••
+                                {payment.cardDetails.last4}
                               </span>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={getStatusColor(payment.status)}>
-                            {payment.status}
+                          <Badge
+                            className={
+                              STATUS_STYLES[payment.paymentStatus] ??
+                              'bg-gray-100 text-gray-800'
+                            }
+                          >
+                            {STATUS_LABEL[payment.paymentStatus] ??
+                              payment.paymentStatus}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Link href={`/admin/payments/${payment.id}`}>
+                          <Link href={`/admin/payments/${payment._id}`}>
                             <Button variant="ghost" size="icon">
                               <Eye className="h-4 w-4" />
                               <span className="sr-only">View</span>
@@ -381,6 +478,32 @@ export default function PaymentsPage() {
                 </TableBody>
               </Table>
             </div>
+
+            {totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Page {page} of {totalPages}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1 || isLoading}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages || isLoading}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

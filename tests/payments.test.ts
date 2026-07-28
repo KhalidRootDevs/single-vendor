@@ -36,6 +36,7 @@ async function createTestOrder() {
   });
   const product = await Product.create({
     name: 'Paid Product',
+    description: 'A product used by the payment integration tests.',
     price: 50,
     stock: 10,
     active: true,
@@ -52,6 +53,7 @@ async function createTestOrder() {
     },
     items: [
       {
+        id: 1,
         productId: product._id,
         name: product.name,
         price: product.price,
@@ -102,6 +104,22 @@ describe('Order payment status updates', () => {
     const updated = await Order.findById(order._id);
     expect(updated!.paymentStatus).toBe('paid');
     expect(updated!.paymentIntentId).toBe('pi_test_12345');
+  });
+
+  it('persists refund fields when a refund is recorded', async () => {
+    const order = await createTestOrder();
+
+    order.paymentStatus = 'refunded';
+    order.refundId = 're_test_12345';
+    order.refundedAmount = 59.99;
+    order.refundedAt = new Date();
+    await order.save();
+
+    const updated = await Order.findById(order._id);
+    expect(updated!.paymentStatus).toBe('refunded');
+    expect(updated!.refundId).toBe('re_test_12345');
+    expect(updated!.refundedAmount).toBe(59.99);
+    expect(updated!.refundedAt).toBeInstanceOf(Date);
   });
 
   it('sets paymentStatus to failed without changing order status', async () => {

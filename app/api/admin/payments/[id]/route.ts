@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import { Order } from '@/models/Order';
 import { verifyToken } from '@/lib/auth';
 import connectDB from '@/lib/database';
@@ -23,6 +24,12 @@ export async function GET(
     }
 
     const { id } = params;
+
+    // A non-ObjectId (e.g. a stale bookmark) would make findById throw a
+    // CastError and surface as a 500 — it's a missing record, not a crash.
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Payment not found' }, { status: 404 });
+    }
 
     const order = await Order.findById(id)
       .populate('timeline.updatedBy', 'name email')
@@ -51,6 +58,10 @@ export async function GET(
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
         cardDetails: order.cardDetails ?? null,
+        paymentIntentId: order.paymentIntentId ?? null,
+        refundId: order.refundId ?? null,
+        refundedAmount: order.refundedAmount ?? null,
+        refundedAt: order.refundedAt ?? null,
         status: order.status,
         shippingMethod: order.shippingMethod,
         trackingNumber: order.trackingNumber ?? null,

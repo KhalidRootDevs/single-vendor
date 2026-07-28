@@ -54,6 +54,12 @@ export interface IOrder extends Document {
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   cardDetails?: ICardDetails;
+  /** Stripe PaymentIntent id — the handle the webhook and refunds match on. */
+  paymentIntentId?: string;
+  /** Stripe Refund id, set once a refund has been issued. */
+  refundId?: string;
+  refundedAmount?: number;
+  refundedAt?: Date;
   shippingMethod: string;
   trackingNumber?: string;
   items: IOrderItem[];
@@ -303,6 +309,26 @@ const orderSchema = new Schema<IOrder>(
     },
     cardDetails: {
       type: cardDetailsSchema
+    },
+    // Written at checkout and matched by the Stripe webhook. Without it in the
+    // schema, strict mode silently drops the value on write and every webhook
+    // lookup misses.
+    paymentIntentId: {
+      type: String,
+      trim: true,
+      index: true,
+      sparse: true
+    },
+    refundId: {
+      type: String,
+      trim: true
+    },
+    refundedAmount: {
+      type: Number,
+      min: 0
+    },
+    refundedAt: {
+      type: Date
     },
     shippingMethod: {
       type: String,

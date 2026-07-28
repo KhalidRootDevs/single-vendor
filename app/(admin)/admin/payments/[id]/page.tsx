@@ -1,6 +1,17 @@
 'use client';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -58,6 +69,10 @@ interface PaymentDetail {
     expiryMonth?: number;
     expiryYear?: number;
   } | null;
+  paymentIntentId?: string | null;
+  refundId?: string | null;
+  refundedAmount?: number | null;
+  refundedAt?: string | null;
   status: string;
   shippingMethod: string;
   trackingNumber?: string | null;
@@ -156,6 +171,8 @@ export default function PaymentDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefunding, setIsRefunding] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [confirmRefundOpen, setConfirmRefundOpen] = useState(false);
 
   const fetchPayment = useCallback(async () => {
     setIsLoading(true);
@@ -184,22 +201,112 @@ export default function PaymentDetailsPage() {
   const handleRefund = async () => {
     setIsRefunding(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const res = await fetch(`/api/admin/payments/${id}/refund`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? 'Refund failed');
+      }
+
       toast({
-        title: 'Refund initiated',
-        description:
-          'The refund has been initiated and will be processed shortly.'
+        title: 'Refund issued',
+        description: data.message
+      });
+      // Pull the server's version rather than patching local state — the
+      // refund also writes a timeline event and may restock inventory.
+      await fetchPayment();
+    } catch (err) {
+      toast({
+        title: 'Refund failed',
+        description: err instanceof Error ? err.message : 'Refund failed',
+        variant: 'destructive'
       });
     } finally {
       setIsRefunding(false);
+      setConfirmRefundOpen(false);
     }
   };
 
-  const downloadReceipt = () => {
-    toast({
-      title: 'Receipt downloaded',
-      description: 'The payment receipt has been downloaded.'
-    });
+  const downloadReceipt = async () => {
+    if (!payment) return;
+    setIsDownloading(true);
+    try {
+      // Loaded on demand — jsPDF is heavy and most visits never print.
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+
+      const doc = new jsPDF();
+      const money = (n: number) => `$${n.toFixed(2)}`;
+
+      doc.setFontSize(18);
+      doc.text('Payment Receipt', 14, 20);
+
+      doc.setFontSize(10);
+      doc.text(`Order: ${payment.orderNumber}`, 14, 30);
+      doc.text(`Date: ${formatDate(payment.createdAt)}`, 14, 36);
+      doc.text(
+        `Payment method: ${
+          PAYMENT_METHOD_LABEL[payment.paymentMethod] ?? payment.paymentMethod
+        }`,
+        14,
+        42
+      );
+      doc.text(`Status: ${getStatusInfo(payment.paymentStatus).label}`, 14, 48);
+
+      doc.text(`Billed to: ${payment.customer.name}`, 14, 60);
+      doc.text(payment.customer.email, 14, 66);
+      if (payment.billingAddress) {
+        const a = payment.billingAddress;
+        doc.text(a.address, 14, 72);
+        doc.text(`${a.city}, ${a.state} ${a.zipCode}, ${a.country}`, 14, 78);
+      }
+
+      autoTable(doc, {
+        startY: 88,
+        head: [['Item', 'Qty', 'Unit price', 'Amount']],
+        body: payment.items.map((item) => [
+          item.name,
+          String(item.quantity),
+          money(item.price),
+          money(item.price * item.quantity)
+        ]),
+        foot: [
+          ['', '', 'Subtotal', money(payment.subtotal)],
+          ['', '', 'Tax', money(payment.tax)],
+          ['', '', 'Shipping', money(payment.shipping)],
+          ...(payment.discount
+            ? [['', '', 'Discount', `-${money(payment.discount)}`]]
+            : []),
+          ...(payment.refundedAmount
+            ? [['', '', 'Refunded', `-${money(payment.refundedAmount)}`]]
+            : []),
+          ['', '', 'Total', `${money(payment.total)} USD`]
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [30, 30, 30] },
+        footStyles: { fillColor: [245, 245, 245], textColor: 20 }
+      });
+
+      doc.save(`receipt-${payment.orderNumber}.pdf`);
+
+      toast({
+        title: 'Receipt downloaded',
+        description: `receipt-${payment.orderNumber}.pdf`
+      });
+    } catch (err) {
+      toast({
+        title: 'Could not generate receipt',
+        description: err instanceof Error ? err.message : 'Unexpected error',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (isLoading) {
@@ -287,29 +394,62 @@ export default function PaymentDetailsPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={downloadReceipt}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadReceipt}
+              disabled={isDownloading}
+            >
               <Download className="mr-2 h-4 w-4" />
-              Download Receipt
+              {isDownloading ? 'Preparing...' : 'Download Receipt'}
             </Button>
             {payment.paymentStatus === 'paid' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefund}
-                disabled={isRefunding}
+              <AlertDialog
+                open={confirmRefundOpen}
+                onOpenChange={setConfirmRefundOpen}
               >
-                {isRefunding ? (
-                  <>
-                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Issue Refund
-                  </>
-                )}
-              </Button>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={isRefunding}>
+                    {isRefunding ? (
+                      <>
+                        <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Issue Refund
+                      </>
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      Refund ${payment.total.toFixed(2)}?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {payment.paymentIntentId
+                        ? `This sends the full ${payment.orderNumber} amount back through Stripe. Stripe refunds cannot be reversed.`
+                        : `${payment.orderNumber} has no Stripe payment attached, so this records the refund and restocks the items — you still need to return the funds to the customer yourself.`}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isRefunding}>
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleRefund();
+                      }}
+                      disabled={isRefunding}
+                    >
+                      {isRefunding ? 'Processing...' : 'Confirm refund'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
         </div>
@@ -329,7 +469,17 @@ export default function PaymentDetailsPage() {
             <RefreshCw className="h-4 w-4" />
             <AlertTitle>Payment Refunded</AlertTitle>
             <AlertDescription>
-              This payment has been refunded to the customer.
+              {payment.refundedAmount != null
+                ? `$${payment.refundedAmount.toFixed(2)} refunded${
+                    payment.refundedAt
+                      ? ` on ${formatDate(payment.refundedAt)}`
+                      : ''
+                  }${
+                    payment.refundId
+                      ? ` — Stripe refund ${payment.refundId}`
+                      : ' — recorded manually, settle the funds directly'
+                  }.`
+                : 'This payment has been refunded to the customer.'}
             </AlertDescription>
           </Alert>
         )}
@@ -403,12 +553,26 @@ export default function PaymentDetailsPage() {
                   </div>
 
                   <Separator />
-                  <div>
-                    <div className="mb-1 text-sm text-muted-foreground">
-                      Description
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <div className="mb-1 text-sm text-muted-foreground">
+                        Description
+                      </div>
+                      <div className="text-sm">
+                        Payment for Order {payment.orderNumber}
+                      </div>
                     </div>
-                    <div className="text-sm">
-                      Payment for Order {payment.orderNumber}
+                    <div>
+                      <div className="mb-1 text-sm text-muted-foreground">
+                        Transaction ID
+                      </div>
+                      <div className="break-all font-mono text-sm">
+                        {payment.paymentIntentId ?? (
+                          <span className="font-sans text-muted-foreground">
+                            Not processed through Stripe
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

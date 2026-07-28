@@ -98,8 +98,7 @@ export async function POST(
     );
   }
 
-  const paymentIntentId = (order as unknown as Record<string, unknown>)
-    .paymentIntentId as string | undefined;
+  const paymentIntentId = order.paymentIntentId;
 
   if (paymentIntentId) {
     try {
