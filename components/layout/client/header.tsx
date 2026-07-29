@@ -16,15 +16,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-  navigationMenuTriggerStyle
-} from '@/components/ui/navigation-menu';
+import { navigationMenuTriggerStyle } from '@/components/ui/navigation-menu';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { WishlistDrawer } from '@/components/wishlist-drawer';
 import { useAuth } from '@/context/auth-context';
@@ -37,6 +29,7 @@ import {
   BookOpen,
   Briefcase,
   Car,
+  ChevronDown,
   Dog,
   Dumbbell,
   FileText,
@@ -433,158 +426,161 @@ export function Header({ categoryTree }: HeaderProps) {
 
           {/* Desktop Navigation - Hidden on mobile */}
           <div className="hidden lg:flex lg:flex-1 lg:justify-center">
-            <NavigationMenu>
-              <NavigationMenuList>
-                <NavigationMenuItem>
-                  <Link href="/" legacyBehavior passHref>
-                    <NavigationMenuLink
-                      className={cn(
-                        navigationMenuTriggerStyle(),
-                        isActive('/') ? 'text-primary' : 'text-muted-foreground'
-                      )}
-                    >
-                      Home
-                    </NavigationMenuLink>
-                  </Link>
-                </NavigationMenuItem>
+            <nav className="flex items-center gap-1">
+              <Link
+                href="/"
+                className={cn(
+                  navigationMenuTriggerStyle(),
+                  isActive('/') ? 'text-primary' : 'text-muted-foreground'
+                )}
+              >
+                Home
+              </Link>
 
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger
+              {/* Categories mega-menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
                     className={cn(
-                      'transition-colors',
+                      navigationMenuTriggerStyle(),
+                      'gap-1',
                       isActive('/categories')
                         ? 'text-primary'
                         : 'text-muted-foreground'
                     )}
                   >
                     Categories
-                  </NavigationMenuTrigger>
-                  <NavigationMenuContent className="overflow-hidden">
-                    <div className="w-screen max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-5xl">
-                      <div className="grid max-h-[70vh] auto-rows-max grid-cols-1 gap-2 overflow-y-auto p-4 sm:grid-cols-2 sm:gap-3 sm:p-6 lg:grid-cols-4 xl:grid-cols-5">
-                        {categoryTree.map((category: any) => {
-                          const categoryIcon = categoryIcons[category.name];
-                          return (
-                            <div key={category.id} className="col-span-1">
-                              <div className="mb-2 flex items-center gap-2 sm:mb-3">
-                                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-8 sm:w-8">
-                                  {categoryIcon ? (
-                                    <div className="h-4 w-4 text-primary">
-                                      {categoryIcon}
-                                    </div>
-                                  ) : (
-                                    <ShirtIcon className="h-4 w-4 text-primary" />
-                                  )}
+                    <ChevronDown className="h-3 w-3 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  sideOffset={8}
+                  className="w-[min(92vw,64rem)] p-4 sm:p-6"
+                >
+                  <div className="grid max-h-[70vh] auto-rows-max grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {categoryTree.map((category: any) => {
+                      const categoryIcon = categoryIcons[category.name];
+                      return (
+                        <div key={category._id} className="col-span-1">
+                          <div className="mb-2 flex items-center gap-2 sm:mb-3">
+                            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-8 sm:w-8">
+                              {categoryIcon ? (
+                                <div className="h-4 w-4 text-primary">
+                                  {categoryIcon}
                                 </div>
-                                <h3 className="truncate text-sm font-semibold text-foreground sm:text-base">
-                                  {category.name}
-                                </h3>
-                              </div>
-                              <div className="space-y-0.5 sm:space-y-1">
-                                {category.subCategories?.length > 0 ? (
-                                  category.subCategories.map(
-                                    (subCategory: any) => (
-                                      <Link
-                                        key={subCategory.id}
-                                        href={`/products?categories=${subCategory.slug}`}
-                                        className="block rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-all duration-200 hover:translate-x-1 hover:bg-muted hover:text-primary sm:px-3 sm:py-2 sm:text-sm"
-                                      >
-                                        <span className="block truncate">
-                                          {subCategory.name}
-                                        </span>
-                                      </Link>
-                                    )
-                                  )
-                                ) : (
-                                  <p className="px-2 py-1.5 text-xs text-muted-foreground/50 sm:px-3 sm:py-2">
-                                    No subcategories
-                                  </p>
-                                )}
-                              </div>
+                              ) : (
+                                <ShirtIcon className="h-4 w-4 text-primary" />
+                              )}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
+                            <h3 className="truncate text-sm font-semibold text-foreground sm:text-base">
+                              {category.name}
+                            </h3>
+                          </div>
+                          <div className="space-y-0.5 sm:space-y-1">
+                            {category.subCategories?.length > 0 ? (
+                              category.subCategories.map((subCategory: any) => (
+                                <Link
+                                  key={subCategory._id}
+                                  href={`/products?categories=${subCategory.slug}`}
+                                  className="block rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-all duration-200 hover:translate-x-1 hover:bg-muted hover:text-primary sm:px-3 sm:py-2 sm:text-sm"
+                                >
+                                  <span className="block truncate">
+                                    {subCategory.name}
+                                  </span>
+                                </Link>
+                              ))
+                            ) : (
+                              <p className="px-2 py-1.5 text-xs text-muted-foreground/50 sm:px-3 sm:py-2">
+                                No subcategories
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-                <NavigationMenuItem>
-                  <Link href="/products" legacyBehavior passHref>
-                    <NavigationMenuLink
-                      className={cn(
-                        navigationMenuTriggerStyle(),
-                        isActive('/products')
-                          ? 'text-primary'
-                          : 'text-muted-foreground'
-                      )}
-                    >
-                      Products
-                    </NavigationMenuLink>
-                  </Link>
-                </NavigationMenuItem>
+              <Link
+                href="/products"
+                className={cn(
+                  navigationMenuTriggerStyle(),
+                  isActive('/products')
+                    ? 'text-primary'
+                    : 'text-muted-foreground'
+                )}
+              >
+                Products
+              </Link>
 
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger
-                    className={
+              {/* Deals menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={cn(
+                      navigationMenuTriggerStyle(),
+                      'gap-1',
                       isActive('/deals')
                         ? 'text-primary'
                         : 'text-muted-foreground'
-                    }
+                    )}
                   >
                     Deals
-                  </NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <div className="w-64 p-4">
-                      <div className="grid gap-2">
-                        <Link
-                          href="/products?discount=true"
-                          className="flex items-center gap-2 rounded-md p-2 transition-colors hover:bg-muted"
-                        >
-                          <div className="flex-shrink-0 rounded-full bg-primary/10 p-2">
-                            <Sparkles className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <div className="font-medium">Sale Items</div>
-                            <div className="text-xs text-muted-foreground">
-                              Special discounts
-                            </div>
-                          </div>
-                        </Link>
-                        <Link
-                          href="/products?sort=best-selling"
-                          className="flex items-center gap-2 rounded-md p-2 transition-colors hover:bg-muted"
-                        >
-                          <div className="flex-shrink-0 rounded-full bg-primary/10 p-2">
-                            <Sparkles className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <div className="font-medium">Best Sellers</div>
-                            <div className="text-xs text-muted-foreground">
-                              Most popular
-                            </div>
-                          </div>
-                        </Link>
-                        <Link
-                          href="/products?clearance=true"
-                          className="flex items-center gap-2 rounded-md p-2 transition-colors hover:bg-muted"
-                        >
-                          <div className="flex-shrink-0 rounded-full bg-primary/10 p-2">
-                            <Sparkles className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <div className="font-medium">Clearance</div>
-                            <div className="text-xs text-muted-foreground">
-                              Last chance
-                            </div>
-                          </div>
-                        </Link>
+                    <ChevronDown className="h-3 w-3 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  sideOffset={8}
+                  className="w-64 p-2"
+                >
+                  <Link
+                    href="/products?discount=true"
+                    className="flex items-center gap-2 rounded-md p-2 transition-colors hover:bg-muted"
+                  >
+                    <div className="flex-shrink-0 rounded-full bg-primary/10 p-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Sale Items</div>
+                      <div className="text-xs text-muted-foreground">
+                        Special discounts
                       </div>
                     </div>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
-              </NavigationMenuList>
-            </NavigationMenu>
+                  </Link>
+                  <Link
+                    href="/products?sort=best-selling"
+                    className="flex items-center gap-2 rounded-md p-2 transition-colors hover:bg-muted"
+                  >
+                    <div className="flex-shrink-0 rounded-full bg-primary/10 p-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Best Sellers</div>
+                      <div className="text-xs text-muted-foreground">
+                        Most popular
+                      </div>
+                    </div>
+                  </Link>
+                  <Link
+                    href="/products?clearance=true"
+                    className="flex items-center gap-2 rounded-md p-2 transition-colors hover:bg-muted"
+                  >
+                    <div className="flex-shrink-0 rounded-full bg-primary/10 p-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Clearance</div>
+                      <div className="text-xs text-muted-foreground">
+                        Last chance
+                      </div>
+                    </div>
+                  </Link>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </nav>
           </div>
 
           {/* Search Bar - Mobile/Desktop */}
